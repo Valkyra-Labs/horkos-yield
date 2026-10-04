@@ -1180,6 +1180,26 @@
     "expect": {"error": "matured"}
   },
   {
+    "name": "derive error: unknown coupon type",
+    "fn": "derive_bond",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 98.12,
+        "accrued": 16.15,
+        "couponType": "zero",
+        "couponRatePct": 12.03,
+        "spreadPct": 0,
+        "periodDays": 182,
+        "maturity": "2029-01-12",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16}
+    ],
+    "expect": {"error": "invalid_code"}
+  },
+  {
     "name": "derive error: a bad date is reported before a bad nominal",
     "fn": "derive_bond",
     "args": [
@@ -3342,6 +3362,62 @@
       }
     ],
     "expect": {"error": "matured"}
+  },
+  {
+    "name": "calculate error: unknown tax regime",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 98.12,
+        "accrued": 16.15,
+        "couponType": "fixed",
+        "couponRatePct": 12.03,
+        "spreadPct": 0,
+        "periodDays": 182,
+        "maturity": "2029-01-12",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16},
+      {
+        "amount": 100000,
+        "horizonDay": 365,
+        "reinvest": false,
+        "taxRegime": "flat",
+        "taxRatePct": 13,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {"error": "invalid_code"}
+  },
+  {
+    "name": "calculate error: an unknown code is reported before a bad date",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 98.12,
+        "accrued": 16.15,
+        "couponType": "zero",
+        "couponRatePct": 12.03,
+        "spreadPct": 0,
+        "periodDays": 182,
+        "maturity": "x",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16},
+      {
+        "amount": 100000,
+        "horizonDay": 365,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "taxRatePct": 13,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {"error": "invalid_code"}
   },
   {
     "name": "calculate error: malformed valuation date",

@@ -13,6 +13,10 @@ use std::fmt;
 /// code, the same in the TypeScript twin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
+    /// A coupon type or tax regime code is not one of the known codes.
+    /// Only the JavaScript boundary and the twin produce it: the Rust types
+    /// cannot hold an unknown code. It is checked before anything else.
+    InvalidCode,
     /// A date is not a valid `YYYY-MM-DD`.
     InvalidDate,
     /// The nominal is not a positive finite number.
@@ -37,6 +41,7 @@ impl Error {
     /// The stable code of this error.
     pub fn code(self) -> &'static str {
         match self {
+            Error::InvalidCode => "invalid_code",
             Error::InvalidDate => "invalid_date",
             Error::InvalidNominal => "invalid_nominal",
             Error::InvalidPeriod => "invalid_period",

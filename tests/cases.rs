@@ -46,8 +46,12 @@ fn opt(x: Option<f64>) -> Value {
     x.map_or(Value::Null, f)
 }
 
-fn issue(v: &Value) -> Issue {
-    Issue {
+// Codes are decoded as the JavaScript boundary decodes them: an unknown
+// coupon type or tax regime is `Error::InvalidCode`, before anything else.
+fn issue(v: &Value) -> Result<Issue, Error> {
+    let coupon_type = CouponType::from_code(v["couponType"].as_str().expect("coupon type"))
+        .ok_or(Error::InvalidCode)?;
+    Ok(Issue {
         nominal: num(&v["nominal"]),
         price_pct: num(&v["pricePct"]),
         accrued: if v["accrued"].is_null() {
@@ -55,8 +59,7 @@ fn issue(v: &Value) -> Issue {
         } else {
             Some(num(&v["accrued"]))
         },
-        coupon_type: CouponType::from_code(v["couponType"].as_str().expect("coupon type"))
-            .expect("known coupon type"),
+        coupon_type,
         coupon_rate_pct: num(&v["couponRatePct"]),
         spread_pct: num(&v["spreadPct"]),
         period_days: num(&v["periodDays"]),
@@ -76,7 +79,7 @@ fn issue(v: &Value) -> Issue {
                 fraction_pct: num(&a["fractionPct"]),
             })
             .collect(),
-    }
+    })
 }
 
 fn market(v: &Value) -> Market {
@@ -86,16 +89,17 @@ fn market(v: &Value) -> Market {
     }
 }
 
-fn plan(v: &Value) -> Plan {
-    Plan {
+fn plan(v: &Value) -> Result<Plan, Error> {
+    let tax_regime = TaxRegime::from_code(v["taxRegime"].as_str().expect("tax regime"))
+        .ok_or(Error::InvalidCode)?;
+    Ok(Plan {
         amount: num(&v["amount"]),
         horizon_day: num(&v["horizonDay"]),
         reinvest: v["reinvest"].as_bool().expect("reinvest"),
-        tax_regime: TaxRegime::from_code(v["taxRegime"].as_str().expect("tax regime"))
-            .expect("known tax regime"),
+        tax_regime,
         tax_rate_pct: num(&v["taxRatePct"]),
         rate_shift_pct: num(&v["rateShiftPct"]),
-    }
+    })
 }
 
 fn schedule(s: &Schedule) -> Value {
@@ -225,9 +229,14 @@ fn run(name: &str, a: &[Value]) -> Value {
             num(&a[5]),
         )),
         "price_after_rate_shift" => f(price_after_rate_shift(num(&a[0]), num(&a[1]), num(&a[2]))),
-        "derive_bond" => outcome(derive_bond(&issue(&a[0]), &market(&a[1])), derived),
+        "derive_bond" => outcome(
+            issue(&a[0]).and_then(|i| derive_bond(&i, &market(&a[1]))),
+            derived,
+        ),
         "calculate" => outcome(
-            calculate(&issue(&a[0]), &market(&a[1]), &plan(&a[2])),
+            issue(&a[0])
+                .and_then(|i| Ok((i, plan(&a[2])?)))
+                .and_then(|(i, p)| calculate(&i, &market(&a[1]), &p)),
             calculation,
         ),
         other => panic!("unknown function {other}"),
@@ -328,7 +337,10 @@ fn breakdown_lines_add_up() {
     let cases: Vec<Value> = serde_json::from_str(CASES).expect("valid cases.json");
     for case in cases.iter().filter(|c| c["fn"] == "calculate") {
         let a = case["args"].as_array().expect("args");
-        let Ok(c) = calculate(&issue(&a[0]), &market(&a[1]), &plan(&a[2])) else {
+        let (Ok(i), Ok(p)) = (issue(&a[0]), plan(&a[2])) else {
+            continue;
+        };
+        let Ok(c) = calculate(&i, &market(&a[1]), &p) else {
             continue;
         };
         let b = c.plan;
