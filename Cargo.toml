@@ -24,3 +24,12 @@ serde_json = "1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+# The WebAssembly module ships to the browser. Measured at fd23e70 (60-issue
+# set, derive and calculate, best of 300 under Node): opt-level 3 with LTO
+# and one codegen unit is 64,861 bytes (24,975 gzipped) at 9.61 ms; the
+# default is 68,932 (26,446) at 9.63 ms; "s" 64,454 (25,574) at 9.75 ms;
+# "z" 64,571 (25,636) at 9.96 ms.
+[profile.release]
+lto = true
+codegen-units = 1
