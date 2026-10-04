@@ -4,6 +4,10 @@
 //
 // Tolerance: numbers agree when |a - b| <= 1e-6 * max(|a|, |b|), both NaN
 // counts as equal, everything else must be identical (node/compare.mjs).
+//
+// Each test, once it has passed, reports what it checked as a diagnostic
+// line, `parity {"checked": ..., "count": n}`, which scripts/badges.mjs
+// reads for the parity badge.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -33,7 +37,7 @@ function call(impl, fn, args) {
   return impl[fn](...x);
 }
 
-test("wasm and twin agree with cases.json and with each other on every case", () => {
+test("wasm and twin agree with cases.json and with each other on every case", (t) => {
   const failures = [];
   let worst = 0;
   for (const c of cases) {
@@ -51,6 +55,7 @@ test("wasm and twin agree with cases.json and with each other on every case", ()
   }
   console.log(`${cases.length} cases; worst relative difference ${worst.toExponential(2)}`);
   assert.deepEqual(failures, []);
+  t.diagnostic(`parity ${JSON.stringify({ checked: "cases", count: cases.length })}`);
 });
 
 // mulberry32: a small seeded generator, so the set is the same on every run.
@@ -123,7 +128,7 @@ export function generate(count, seed) {
   return out;
 }
 
-test("wasm and twin agree on 1,000 generated issues and plans", () => {
+test("wasm and twin agree on 1,000 generated issues and plans", (t) => {
   const set = generate(1000, 20261004);
   const failures = [];
   let worst = 0;
@@ -148,4 +153,5 @@ test("wasm and twin agree on 1,000 generated issues and plans", () => {
   assert.deepEqual(failures.slice(0, 20), []);
   // The set must exercise the paths, not only the errors.
   assert.ok(outcomes.derived > 900 && outcomes.calculated > 800);
+  t.diagnostic(`parity ${JSON.stringify({ checked: "generated issues", count: set.length })}`);
 });
