@@ -1,5 +1,23 @@
 # horkos-yield
 
+[![CI](https://github.com/Valkyra-Labs/horkos-yield/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Valkyra-Labs/horkos-yield/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/horkos-yield/badges/tests.json)](https://github.com/Valkyra-Labs/horkos-yield/actions/workflows/ci.yml)
+[![Twin tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/horkos-yield/badges/twin-tests.json)](https://github.com/Valkyra-Labs/horkos-yield/actions/workflows/ci.yml)
+[![Parity](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/horkos-yield/badges/parity.json)](#parity)
+[![wasm gzip](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/horkos-yield/badges/wasm-size.json)](https://github.com/Valkyra-Labs/horkos-yield/actions/workflows/ci.yml)
+[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue.svg)](Cargo.toml)
+
+The tests, twin tests, parity and wasm badges are published by CI from
+each green run on `main`: tests passed in `cargo test --release` on
+Linux (unit, integration and doc tests); tests passed in the twin's
+`pnpm test` (Vitest); the number of cases and of generated issues on
+which `node/parity.test.mjs` found the WebAssembly build and the twin in
+agreement (see [Parity](#parity)), as each test reports it once it has
+passed; and the gzip size (level 9) of the WebAssembly module that CI
+builds with wasm-pack (`--no-default-features --features wasm`). CI
+checks the MSRV with `cargo +1.85 check`.
+
 Bond mathematics for a bond-investing demo, in Rust compiled to
 WebAssembly, with a TypeScript twin in `twin/`: a second implementation
 of the same functions, written separately and checked against the Rust
