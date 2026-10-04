@@ -1,0 +1,11 @@
+/target
+/pkg
+.DS_Store
+node_modules
+/twin/dist
+*.tsbuildinfo
+/docs/inside/
+# Local agent instructions and settings; never committed.
+CLAUDE.md
+AGENTS.md
+.claude/

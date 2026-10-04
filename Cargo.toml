@@ -1,0 +1,26 @@
+[package]
+name = "horkos-yield"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Bond mathematics for a bond-investing demo: price and yield, duration, cash flows with amortisation and offers, floaters, tax, holding-period results"
+repository = "https://github.com/Valkyra-Labs/horkos-yield"
+readme = "README.md"
+keywords = ["bonds", "yield", "duration", "finance", "wasm"]
+categories = ["finance", "mathematics"]
+exclude = ["/twin", "/node", "/fixtures"]
+
+[features]
+default = []
+# JavaScript bindings for the browser (wasm-bindgen).
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
