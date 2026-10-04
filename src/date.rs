@@ -1,0 +1,89 @@
+//! Calendar dates as whole days, proleptic Gregorian, no time zone.
+
+/// Days since 1970-01-01 of an ISO date `YYYY-MM-DD` (years 0000 to 9999).
+/// `None` for anything else, including days that do not exist
+/// (`2026-02-29`).
+pub fn parse_iso_date(s: &str) -> Option<i64> {
+    let b = s.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let digits = |r: std::ops::Range<usize>| -> Option<i64> {
+        let mut v = 0i64;
+        for &c in &b[r] {
+            if !c.is_ascii_digit() {
+                return None;
+            }
+            v = v * 10 + i64::from(c - b'0');
+        }
+        Some(v)
+    };
+    let y = digits(0..4)?;
+    let m = digits(5..7)?;
+    let d = digits(8..10)?;
+    if !(1..=12).contains(&m) || d < 1 || d > days_in_month(y, m) {
+        return None;
+    }
+    Some(days_from_civil(y, m, d))
+}
+
+/// Whole days from `from` to `to` (negative when `to` is earlier).
+pub fn day_offset(from: &str, to: &str) -> Option<i64> {
+    Some(parse_iso_date(to)? - parse_iso_date(from)?)
+}
+
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+fn days_in_month(y: i64, m: i64) -> i64 {
+    match m {
+        2 if is_leap(y) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+// Howard Hinnant's days_from_civil.
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_days() {
+        assert_eq!(parse_iso_date("1970-01-01"), Some(0));
+        assert_eq!(parse_iso_date("2000-03-01"), Some(11_017));
+        assert_eq!(parse_iso_date("0000-01-01"), Some(-719_528));
+        assert_eq!(day_offset("2026-09-04", "2027-09-04"), Some(365));
+        assert_eq!(day_offset("2027-09-04", "2028-09-04"), Some(366));
+    }
+
+    #[test]
+    fn rejects_malformed_dates() {
+        for s in [
+            "",
+            "2026-9-04",
+            "2026-02-29",
+            "2026-13-01",
+            "2026-00-10",
+            "2026-04-31",
+            "2026/09/04",
+            "2026-09-04T00:00:00Z",
+            "+026-09-04",
+        ] {
+            assert_eq!(parse_iso_date(s), None, "{s}");
+        }
+        assert!(parse_iso_date("2024-02-29").is_some());
+    }
+}
