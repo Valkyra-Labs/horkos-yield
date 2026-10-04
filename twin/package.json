@@ -1,0 +1,32 @@
+{
+  "name": "horkos-yield-twin",
+  "version": "0.1.0",
+  "description": "TypeScript twin of horkos-yield: the same bond mathematics, implemented independently and checked against the Rust crate",
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "packageManager": "pnpm@11.25.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Valkyra-Labs/horkos-yield",
+    "directory": "twin"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  }
+}
