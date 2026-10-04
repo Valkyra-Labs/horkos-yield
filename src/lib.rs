@@ -15,6 +15,40 @@
 //!
 //! A TypeScript twin in `twin/` implements the same functions
 //! independently; `cases.json` and the parity tests hold the two together.
+//!
+//! ```
+//! use horkos_yield::{calculate, derive_bond, CouponType, Issue, Market, Plan, TaxRegime};
+//!
+//! let issue = Issue {
+//!     nominal: 1000.0,
+//!     price_pct: 98.12,
+//!     accrued: None,
+//!     coupon_type: CouponType::Fixed,
+//!     coupon_rate_pct: 14.0,
+//!     spread_pct: 0.0,
+//!     period_days: 182.0,
+//!     maturity: "2029-01-12".into(),
+//!     offers: vec![],
+//!     amortization: vec![],
+//! };
+//! let market = Market { valuation_date: "2026-09-04".into(), key_rate_pct: 16.0 };
+//!
+//! let d = derive_bond(&issue, &market).unwrap();
+//! assert_eq!(d.maturity_day, 861.0);
+//! assert_eq!(d.coupon_days.len(), 5);
+//!
+//! let plan = Plan {
+//!     amount: 100_000.0,
+//!     horizon_day: 365.0,
+//!     reinvest: true,
+//!     tax_regime: TaxRegime::Standard,
+//!     tax_rate_pct: 13.0,
+//!     rate_shift_pct: 2.0,
+//! };
+//! let b = calculate(&issue, &market, &plan).unwrap().plan;
+//! let lines = b.coupons + b.reinvest + b.amort + b.body + b.tax + b.commission;
+//! assert!((lines - b.total).abs() < 1e-6);
+//! ```
 
 mod calculate;
 pub mod date;

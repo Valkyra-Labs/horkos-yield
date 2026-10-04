@@ -8,8 +8,8 @@
 //! the error `invalid_code`.
 //!
 //! Structs rather than JSON: on the 60-issue set the struct boundary
-//! added about 5 percent to the time spent inside wasm, the JSON boundary
-//! about 38 percent (docs/MEASUREMENTS.md).
+//! added 4 to 6 percent to the time spent inside wasm, the JSON boundary
+//! 36 to 41 percent (docs/MEASUREMENTS.md).
 
 use crate::primitives as p;
 use crate::{
