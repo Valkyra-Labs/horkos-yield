@@ -1,11 +1,16 @@
 //! JavaScript bindings (feature `wasm`).
 //!
 //! The primitives take and return `Float64Array`s and numbers under their
-//! Rust names. `derive_bond` and `calculate` are exposed twice while the
-//! boundary is being measured: as JSON strings (`*_json`) and as
-//! wasm-bindgen structs (`*_structs`).
+//! Rust names. `derive_bond` and `calculate` take and return wasm-bindgen
+//! structs with camelCase fields (`Issue`, `Market` and `Plan` in;
+//! `DeriveResult` and `CalculateResult` out, each with `ok` or `error`
+//! set). Codes cross as strings: an unknown coupon type or tax regime is
+//! the error `invalid_code`.
+//!
+//! Structs rather than JSON: on the 60-issue set the struct boundary
+//! added about 5 percent to the time spent inside wasm, the JSON boundary
+//! about 38 percent (docs/MEASUREMENTS.md).
 
-use crate::json;
 use crate::primitives as p;
 use crate::{
     Amortization, Breakdown, Calculation, CouponType, Derived, Error, Issue, Market, Plan,
@@ -124,38 +129,6 @@ pub fn price_after_rate_shift(price: f64, mod_duration: f64, delta_pct: f64) -> 
 pub fn effective_annual_pct(invested: f64, total: f64, horizon_day: f64) -> f64 {
     crate::effective_annual_pct(invested, total, horizon_day)
 }
-
-// JSON boundary -----------------------------------------------------------
-
-fn bad_input() -> String {
-    "{\"error\":\"invalid_input\"}".to_owned()
-}
-
-/// `derive_bond` on JSON: an issue and a market in, `{"ok": ...}` or
-/// `{"error": code}` out.
-#[wasm_bindgen]
-pub fn derive_bond_json(issue: &str, market: &str) -> String {
-    let (Some(i), Some(m)) = (json::parse(issue), json::parse(market)) else {
-        return bad_input();
-    };
-    let r = json::issue_from(&i).and_then(|i| crate::derive_bond(&i, &json::market_from(&m)));
-    json::write_derived(&r)
-}
-
-/// `calculate` on JSON: an issue, a market and a plan in.
-#[wasm_bindgen]
-pub fn calculate_json(issue: &str, market: &str, plan: &str) -> String {
-    let (Some(i), Some(m), Some(pl)) = (json::parse(issue), json::parse(market), json::parse(plan))
-    else {
-        return bad_input();
-    };
-    let r = json::issue_from(&i)
-        .and_then(|i| Ok((i, json::plan_from(&pl)?)))
-        .and_then(|(i, pl)| crate::calculate(&i, &json::market_from(&m), &pl));
-    json::write_calculation(&r)
-}
-
-// Struct boundary ---------------------------------------------------------
 
 #[wasm_bindgen(js_name = Issue, getter_with_clone)]
 #[derive(Clone, Default)]
@@ -480,8 +453,9 @@ pub struct JsCalculateResult {
     pub error: Option<String>,
 }
 
+/// Derives an issue in a market.
 #[wasm_bindgen]
-pub fn derive_bond_structs(issue: &JsIssue, market: &JsMarket) -> JsDeriveResult {
+pub fn derive_bond(issue: &JsIssue, market: &JsMarket) -> JsDeriveResult {
     match issue_of(issue).and_then(|i| crate::derive_bond(&i, &market_of(market))) {
         Ok(d) => JsDeriveResult {
             ok: Some(d.into()),
@@ -494,8 +468,9 @@ pub fn derive_bond_structs(issue: &JsIssue, market: &JsMarket) -> JsDeriveResult
     }
 }
 
+/// Calculates a plan for an issue in a market.
 #[wasm_bindgen]
-pub fn calculate_structs(issue: &JsIssue, market: &JsMarket, plan: &JsPlan) -> JsCalculateResult {
+pub fn calculate(issue: &JsIssue, market: &JsMarket, plan: &JsPlan) -> JsCalculateResult {
     let r = issue_of(issue)
         .and_then(|i| Ok((i, plan_of(plan)?)))
         .and_then(|(i, pl)| crate::calculate(&i, &market_of(market), &pl));
@@ -509,53 +484,4 @@ pub fn calculate_structs(issue: &JsIssue, market: &JsMarket, plan: &JsPlan) -> J
             error: Some(e.code().to_owned()),
         },
     }
-}
-
-// Measurement only: the 60-issue set held in wasm memory, so the time of
-// derive_bond and calculate without any boundary can be read from
-// JavaScript.
-
-thread_local! {
-    static HELD: std::cell::RefCell<Vec<(Issue, Plan)>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-/// Holds issues and plans (two JSON arrays of equal length); returns how
-/// many were held.
-#[wasm_bindgen]
-pub fn bench_hold(issues: &str, plans: &str) -> u32 {
-    let (Some(json::Value::Arr(is)), Some(json::Value::Arr(ps))) =
-        (json::parse(issues), json::parse(plans))
-    else {
-        return 0;
-    };
-    let held: Vec<(Issue, Plan)> = is
-        .iter()
-        .zip(&ps)
-        .filter_map(|(i, p)| Some((json::issue_from(i).ok()?, json::plan_from(p).ok()?)))
-        .collect();
-    let n = held.len() as u32;
-    HELD.with(|h| *h.borrow_mut() = held);
-    n
-}
-
-/// Derives (mode 0) or calculates (mode 1) every held issue in the given
-/// market; returns a checksum so the work cannot be skipped.
-#[wasm_bindgen]
-pub fn bench_run(mode: u32, valuation_date: &str, key_rate_pct: f64) -> f64 {
-    let market = Market {
-        valuation_date: valuation_date.to_owned(),
-        key_rate_pct,
-    };
-    HELD.with(|h| {
-        h.borrow()
-            .iter()
-            .map(|(i, p)| {
-                if mode == 0 {
-                    crate::derive_bond(i, &market).map_or(0.0, |d| d.ytm_maturity)
-                } else {
-                    crate::calculate(i, &market, p).map_or(0.0, |c| c.plan.total)
-                }
-            })
-            .sum()
-    })
 }

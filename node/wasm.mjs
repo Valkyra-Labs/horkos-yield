@@ -1,5 +1,6 @@
 // Loads the wasm-pack build in pkg/ under Node and wraps derive_bond and
 // calculate so they take and return the same plain objects as the twin.
+// Also the reference for using the structs from JavaScript.
 
 import { readFileSync } from "node:fs";
 
@@ -11,22 +12,9 @@ export async function loadWasm() {
   return glue;
 }
 
-const SPECIAL = { NaN: Number.NaN, Infinity: Number.POSITIVE_INFINITY, "-Infinity": Number.NEGATIVE_INFINITY };
-const revive = (_k, v) => (typeof v === "string" && v in SPECIAL ? SPECIAL[v] : v);
-
-export function jsonBoundary(w) {
-  return {
-    derive_bond: (issue, market) =>
-      JSON.parse(w.derive_bond_json(JSON.stringify(issue), JSON.stringify(market)), revive),
-    calculate: (issue, market, plan) =>
-      JSON.parse(
-        w.calculate_json(JSON.stringify(issue), JSON.stringify(market), JSON.stringify(plan)),
-        revive,
-      ),
-  };
-}
-
-export function structBoundary(w) {
+// The wasm build behind the twin's API: plain objects in, plain objects
+// out (arrays come back as Float64Array), every wasm object freed.
+export function wrap(w) {
   const issueOf = (x) => {
     const i = new w.Issue();
     i.nominal = x.nominal;
@@ -150,7 +138,7 @@ export function structBoundary(w) {
     derive_bond: (issue, market) => {
       const i = issueOf(issue);
       const m = marketOf(market);
-      const out = result(w.derive_bond_structs(i, m), derived);
+      const out = result(w.derive_bond(i, m), derived);
       i.free();
       m.free();
       return out;
@@ -159,7 +147,7 @@ export function structBoundary(w) {
       const i = issueOf(issue);
       const m = marketOf(market);
       const p = planOf(plan);
-      const out = result(w.calculate_structs(i, m, p), calculation);
+      const out = result(w.calculate(i, m, p), calculation);
       i.free();
       m.free();
       p.free();

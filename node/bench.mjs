@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import * as twin from "../twin/dist/index.js";
 import { compare } from "./compare.mjs";
-import { jsonBoundary, loadWasm, structBoundary } from "./wasm.mjs";
+import { loadWasm, wrap } from "./wasm.mjs";
 
 const RUNS = Number(process.argv[2] ?? 200);
 const WARMUP = 20;
@@ -51,8 +51,7 @@ const wasm = await loadWasm();
 const bytes = readFileSync(new URL("../pkg/horkos_yield_bg.wasm", import.meta.url));
 const impls = {
   twin: { derive_bond: twin.derive_bond, calculate: twin.calculate },
-  "wasm, JSON boundary": jsonBoundary(wasm),
-  "wasm, struct boundary": structBoundary(wasm),
+  wasm: wrap(wasm),
 };
 
 // The implementations must agree before their times mean anything.
@@ -71,6 +70,6 @@ console.log(`60 issues, ${60 - errors} plans calculated, ${errors} plan errors`)
 for (const [name, impl] of Object.entries(impls)) {
   const b = bench(impl);
   console.log(
-    `${name.padEnd(22)} derive ${b.derive.toFixed(3)} ms  calculate ${b.calculate.toFixed(3)} ms  both ${b.both.toFixed(3)} ms`,
+    `${name.padEnd(5)} derive ${b.derive.toFixed(3)} ms  calculate ${b.calculate.toFixed(3)} ms  both ${b.both.toFixed(3)} ms`,
   );
 }

@@ -19,10 +19,6 @@
 mod calculate;
 pub mod date;
 mod issue;
-// The JSON boundary is unit-tested natively, and used only by `wasm`.
-#[cfg(any(feature = "wasm", test))]
-#[cfg_attr(not(feature = "wasm"), allow(dead_code))]
-mod json;
 pub mod primitives;
 #[cfg(feature = "wasm")]
 mod wasm;
