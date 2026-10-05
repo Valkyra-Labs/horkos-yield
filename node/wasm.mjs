@@ -42,7 +42,7 @@ export function wrap(w) {
     p.horizonDay = x.horizonDay;
     p.reinvest = x.reinvest;
     p.taxRegime = x.taxRegime;
-    p.taxRatePct = x.taxRatePct;
+    p.otherIncome = x.otherIncome;
     p.rateShiftPct = x.rateShiftPct;
     return p;
   };

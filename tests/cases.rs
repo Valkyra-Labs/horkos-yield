@@ -97,7 +97,7 @@ fn plan(v: &Value) -> Result<Plan, Error> {
         horizon_day: num(&v["horizonDay"]),
         reinvest: v["reinvest"].as_bool().expect("reinvest"),
         tax_regime,
-        tax_rate_pct: num(&v["taxRatePct"]),
+        other_income: num(&v["otherIncome"]),
         rate_shift_pct: num(&v["rateShiftPct"]),
     })
 }
@@ -214,13 +214,7 @@ fn run(name: &str, a: &[Value]) -> Value {
             &arr(&a[2]),
             num(&a[3]),
         )),
-        "tax_amount" => f(tax_amount(
-            num(&a[0]),
-            num(&a[1]),
-            num(&a[2]),
-            u32_arg(&a[3]),
-            num(&a[4]),
-        )),
+        "income_tax" => f(income_tax(num(&a[0]), num(&a[1]))),
         "hold_value" => fs(&hold_value(
             &arr(&a[0]),
             &arr(&a[1]),

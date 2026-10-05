@@ -14,6 +14,7 @@ export type ErrorCode =
   | "amount_not_positive"
   | "amount_too_large"
   | "horizon_out_of_range"
+  | "invalid_other_income"
   | "invalid_price"
   | "amount_below_one_bond";
 
@@ -63,7 +64,12 @@ export type Plan = {
   /* Reinvest coupons and principal repaid by the horizon at the yield to maturity */
   reinvest: boolean;
   taxRegime: TaxRegime;
-  taxRatePct: number;
+  /*
+    The holder's other investment income in each calendar year: with this
+    position's income it decides how much is taxed at 15 rather than 13
+    percent
+  */
+  otherIncome: number;
   /* Key-rate change by the horizon for the early exit, percentage points */
   rateShiftPct: number;
 };

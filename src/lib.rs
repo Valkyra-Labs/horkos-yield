@@ -42,7 +42,7 @@
 //!     horizon_day: 365.0,
 //!     reinvest: true,
 //!     tax_regime: TaxRegime::Standard,
-//!     tax_rate_pct: 13.0,
+//!     other_income: 0.0,
 //!     rate_shift_pct: 2.0,
 //! };
 //! let b = calculate(&issue, &market, &plan).unwrap().plan;

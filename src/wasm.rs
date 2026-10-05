@@ -90,14 +90,8 @@ pub fn floater_coupons(
 }
 
 #[wasm_bindgen]
-pub fn tax_amount(
-    coupon_income: f64,
-    capital_gain: f64,
-    rate_pct: f64,
-    mode: u32,
-    hold_days: f64,
-) -> f64 {
-    p::tax_amount(coupon_income, capital_gain, rate_pct, mode, hold_days)
+pub fn income_tax(base: f64, other_income: f64) -> f64 {
+    p::income_tax(base, other_income)
 }
 
 #[wasm_bindgen]
@@ -203,8 +197,8 @@ pub struct JsPlan {
     pub reinvest: bool,
     #[wasm_bindgen(js_name = taxRegime)]
     pub tax_regime: String,
-    #[wasm_bindgen(js_name = taxRatePct)]
-    pub tax_rate_pct: f64,
+    #[wasm_bindgen(js_name = otherIncome)]
+    pub other_income: f64,
     #[wasm_bindgen(js_name = rateShiftPct)]
     pub rate_shift_pct: f64,
 }
@@ -253,7 +247,7 @@ fn plan_of(p: &JsPlan) -> Result<Plan, Error> {
         horizon_day: p.horizon_day,
         reinvest: p.reinvest,
         tax_regime: TaxRegime::from_code(&p.tax_regime).ok_or(Error::InvalidCode)?,
-        tax_rate_pct: p.tax_rate_pct,
+        other_income: p.other_income,
         rate_shift_pct: p.rate_shift_pct,
     })
 }

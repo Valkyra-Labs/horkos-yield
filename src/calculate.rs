@@ -4,9 +4,9 @@
 use crate::date::{civil_from_days, parse_iso_date};
 use crate::issue::{derive_bond, CouponType, Derived, Error, Issue, Market, Schedule};
 use crate::primitives::{
-    build_cash_flow, floater_rate_path, hold_value, max_nan, min_nan, modified_duration,
-    periodic_rate_pct, price_after_rate_shift, value_along_path, OFFER_NONE, OFFER_RATE_CHANGE,
-    YEAR,
+    build_cash_flow, floater_rate_path, hold_value, income_tax, max_nan, min_nan,
+    modified_duration, periodic_rate_pct, price_after_rate_shift, value_along_path, OFFER_NONE,
+    OFFER_RATE_CHANGE, YEAR,
 };
 
 /// Brokerage commission in percent, charged on the purchase and on a sale
@@ -71,8 +71,10 @@ pub struct Plan {
     /// yield to maturity until the horizon.
     pub reinvest: bool,
     pub tax_regime: TaxRegime,
-    /// Tax rate in percent (13 or 15 for individuals).
-    pub tax_rate_pct: f64,
+    /// The holder's other investment income in each calendar year, in
+    /// currency units: with this position's income it decides how much is
+    /// taxed at 15 rather than 13 percent (see [`income_tax`]).
+    pub other_income: f64,
     /// Key-rate change in percentage points by the horizon, for the early
     /// exit. A fixed coupon's sale price moves by its modified duration; a
     /// floater's coupons follow the key rate and its sale keeps the spread
@@ -327,7 +329,7 @@ impl Hold<'_> {
         let mut tax = 0.0;
         for t in &years {
             let base = t.income + t.result + t.relieved - max_nan(t.relieved, 0.0);
-            tax += max_nan(base, 0.0) * self.plan.tax_rate_pct / 100.0;
+            tax += income_tax(base, self.plan.other_income);
         }
         tax
     }
@@ -373,8 +375,9 @@ fn tax_year(years: &mut Vec<TaxYear>, year: i64) -> &mut TaxYear {
 
 /// Checks a plan against an issue's derived values, in the order
 /// [`Error::AmountNotPositive`], [`Error::AmountTooLarge`],
-/// [`Error::HorizonOutOfRange`], [`Error::InvalidPrice`],
-/// [`Error::AmountBelowOneBond`], and returns the number of bonds bought.
+/// [`Error::HorizonOutOfRange`], [`Error::InvalidOtherIncome`],
+/// [`Error::InvalidPrice`], [`Error::AmountBelowOneBond`], and returns the
+/// number of bonds bought.
 fn check_plan(d: &Derived, plan: &Plan) -> Result<f64, Error> {
     if !plan.amount.is_finite() || plan.amount <= 0.0 {
         return Err(Error::AmountNotPositive);
@@ -385,6 +388,9 @@ fn check_plan(d: &Derived, plan: &Plan) -> Result<f64, Error> {
     if !plan.horizon_day.is_finite() || plan.horizon_day < 1.0 || plan.horizon_day > d.maturity_day
     {
         return Err(Error::HorizonOutOfRange);
+    }
+    if !(plan.other_income.is_finite() && plan.other_income >= 0.0) {
+        return Err(Error::InvalidOtherIncome);
     }
     if !(d.dirty_price.is_finite() && d.dirty_price > 0.0) {
         return Err(Error::InvalidPrice);

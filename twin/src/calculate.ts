@@ -13,6 +13,7 @@ import {
   build_cash_flow,
   floater_rate_path,
   hold_value,
+  income_tax,
   modified_duration,
   periodic_rate_pct,
   price_after_rate_shift,
@@ -185,7 +186,7 @@ function taxOf(h: Holding, flows: Schedule, horizonDay: number, reinvest: number
   let tax = 0;
   for (const y of years) {
     const base = y.income + y.result + y.relieved - Math.max(y.relieved, 0);
-    tax += (Math.max(base, 0) * h.plan.taxRatePct) / 100;
+    tax += income_tax(base, h.plan.otherIncome);
   }
   return tax;
 }
@@ -222,6 +223,7 @@ function checkPlan(d: Derived, plan: Plan): number | ErrorCode {
   if (!Number.isFinite(plan.horizonDay) || plan.horizonDay < 1 || plan.horizonDay > d.maturityDay) {
     return "horizon_out_of_range";
   }
+  if (!(Number.isFinite(plan.otherIncome) && plan.otherIncome >= 0)) return "invalid_other_income";
   if (!(Number.isFinite(d.dirtyPrice) && d.dirtyPrice > 0)) return "invalid_price";
   const qty = Math.floor(plan.amount / d.dirtyPrice);
   return qty < 1 ? "amount_below_one_bond" : qty;

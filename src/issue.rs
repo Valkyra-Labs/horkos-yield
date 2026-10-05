@@ -31,6 +31,9 @@ pub enum Error {
     AmountTooLarge,
     /// The horizon is not between day 1 and the maturity day.
     HorizonOutOfRange,
+    /// The other investment income is not a finite number of at least
+    /// zero.
+    InvalidOtherIncome,
     /// The dirty price is not a positive finite number.
     InvalidPrice,
     /// The amount does not buy a single bond.
@@ -49,6 +52,7 @@ impl Error {
             Error::AmountNotPositive => "amount_not_positive",
             Error::AmountTooLarge => "amount_too_large",
             Error::HorizonOutOfRange => "horizon_out_of_range",
+            Error::InvalidOtherIncome => "invalid_other_income",
             Error::InvalidPrice => "invalid_price",
             Error::AmountBelowOneBond => "amount_below_one_bond",
         }

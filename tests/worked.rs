@@ -48,7 +48,7 @@ fn floater_plan(rate_shift_pct: f64) -> Plan {
         horizon_day: 365.0,
         reinvest: false,
         tax_regime: TaxRegime::IisB,
-        tax_rate_pct: 13.0,
+        other_income: 0.0,
         rate_shift_pct,
     }
 }
@@ -142,7 +142,7 @@ fn amortising_plan_earns_about_its_yield() {
         horizon_day: 730.0,
         reinvest: true,
         tax_regime: TaxRegime::IisB,
-        tax_rate_pct: 13.0,
+        other_income: 0.0,
         rate_shift_pct: 0.0,
     };
     let b = calculate(&amortising(), &market("2026-01-01"), &plan)
@@ -192,6 +192,18 @@ fn no_annual_return_under_a_month() {
     assert_eq!(MIN_ANNUALISED_DAYS, 30.0);
 }
 
+// Ten bonds to maturity, without reinvestment, in an ordinary account.
+fn above_par_plan(other_income: f64) -> Plan {
+    Plan {
+        amount: 11_100.0,
+        horizon_day: 547.0,
+        reinvest: false,
+        tax_regime: TaxRegime::Standard,
+        other_income,
+        rate_shift_pct: 0.0,
+    }
+}
+
 // Annual 10 percent coupons, bought above par between coupons: valuation
 // 2026-01-01, maturity 2027-07-02 (day 547), so the coupons fall on day 182
 // (2026-07-02) and day 547 (2027-07-02). 183 days of the 365-day period
@@ -214,14 +226,7 @@ fn above_par() -> Issue {
 
 #[test]
 fn tax_nets_accrued_interest_and_the_loss_against_coupons() {
-    let plan = Plan {
-        amount: 11_100.0,
-        horizon_day: 547.0,
-        reinvest: false,
-        tax_regime: TaxRegime::Standard,
-        tax_rate_pct: 13.0,
-        rate_shift_pct: 0.0,
-    };
+    let plan = above_par_plan(0.0);
     let b = calculate(&above_par(), &market("2026-01-01"), &plan)
         .unwrap()
         .plan;
@@ -239,4 +244,38 @@ fn tax_nets_accrued_interest_and_the_loss_against_coupons() {
     assert_close!(b.invested, 11_001.369_863_013_699);
     assert_close!(b.tax, -129.106_828_767_123_3);
     assert_close!(b.total, 11_865.392_486_301_369);
+}
+
+#[test]
+fn income_tax_is_15_percent_above_2_4_million_a_year() {
+    // 13 percent up to 2,400,000 of the year's investment income, 15 above.
+    assert_close!(income_tax(1_000.0, 0.0), 130.0);
+    // With 2,000,000 of other income, 400,000 of a 1,000,000 base is under
+    // the threshold: 52,000 + 15 percent of 600,000 = 90,000; 142,000.
+    assert_close!(income_tax(1_000_000.0, 2_000_000.0), 142_000.0);
+    assert_close!(income_tax(1_000.0, 3_000_000.0), 150.0);
+    assert_close!(income_tax(-500.0, 0.0), 0.0);
+    assert_eq!(TAX_THRESHOLD, 2_400_000.0);
+}
+
+#[test]
+fn the_threshold_applies_to_each_year() {
+    // The taxable bases of the above-par plan are 498.630137 in 2026 and
+    // 494.499315 in 2027. With 2,399,700 of other income each year, 300 of
+    // each year's base is taxed at 13 percent and the rest at 15:
+    // 39 + 0.15 x 198.630137 = 68.794521 and 39 + 0.15 x 194.499315 =
+    // 68.174897, together 136.969418.
+    let at = |other_income: f64| {
+        calculate(
+            &above_par(),
+            &market("2026-01-01"),
+            &above_par_plan(other_income),
+        )
+        .unwrap()
+        .plan
+        .tax
+    };
+    assert_close!(at(2_399_700.0), -136.969_417_808_219_2);
+    // All of it at 15 percent: 0.15 x 993.129452 = 148.969418.
+    assert_close!(at(3_000_000.0), -148.969_417_808_219_16);
 }

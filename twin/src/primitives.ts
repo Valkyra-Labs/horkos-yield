@@ -12,9 +12,10 @@ export const OFFER_NONE = 0;
 export const OFFER_REDEEM = 1;
 export const OFFER_RATE_CHANGE = 2;
 
-export const TAX_STANDARD = 0;
-export const TAX_LDV = 1;
-export const TAX_IIS_B = 2;
+/* Income tax: 13 percent up to 2.4 million of a year's investment income, 15 above */
+export const TAX_RATE_PCT = 13;
+export const TAX_HIGHER_RATE_PCT = 15;
+export const TAX_THRESHOLD = 2_400_000;
 
 const at = (xs: Num, i: number): number => xs[i] as number;
 
@@ -144,16 +145,16 @@ export function floater_coupons(
   return out;
 }
 
-export function tax_amount(
-  couponIncome: number,
-  capitalGain: number,
-  ratePct: number,
-  mode: number,
-  holdDays: number,
-): number {
-  if (mode === TAX_IIS_B) return 0;
-  const gainTaxable = mode === TAX_LDV && holdDays >= 3 * YEAR ? 0 : Math.max(capitalGain, 0);
-  return ((Math.max(couponIncome, 0) + gainTaxable) * ratePct) / 100;
+/*
+  Tax on one year's taxable base when the holder's other investment income
+  that year is otherIncome: 13 percent on the part that stays within the
+  threshold with the other income, 15 on the rest; nothing on a base that
+  is not positive.
+*/
+export function income_tax(base: number, otherIncome: number): number {
+  const b = Math.max(base, 0);
+  const low = Math.min(Math.max(TAX_THRESHOLD - otherIncome, 0), b);
+  return (low * TAX_RATE_PCT) / 100 + ((b - low) * TAX_HIGHER_RATE_PCT) / 100;
 }
 
 /*

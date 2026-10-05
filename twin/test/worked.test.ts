@@ -2,7 +2,7 @@
 // the arithmetic in the comments. The same examples run against the Rust
 // crate in tests/worked.rs.
 import { describe, expect, it } from "vitest";
-import { MIN_ANNUALISED_DAYS, calculate, effective_annual_pct, hold_value } from "../src/index.js";
+import { MIN_ANNUALISED_DAYS, TAX_THRESHOLD, calculate, effective_annual_pct, hold_value, income_tax } from "../src/index.js";
 import type { Calculation, Issue, Market, Plan } from "../src/index.js";
 
 const close = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThanOrEqual(1e-9 * Math.max(Math.abs(want), 1));
@@ -37,7 +37,7 @@ const floaterPlan = (rateShiftPct: number): Plan => ({
   horizonDay: 365,
   reinvest: false,
   taxRegime: "iis_b",
-  taxRatePct: 13,
+  otherIncome: 0,
   rateShiftPct,
 });
 
@@ -100,7 +100,7 @@ describe("amortisation", () => {
   });
 
   it("earns about the yield on an amortising plan", () => {
-    const plan: Plan = { amount: 10_000, horizonDay: 730, reinvest: true, taxRegime: "iis_b", taxRatePct: 13, rateShiftPct: 0 };
+    const plan: Plan = { amount: 10_000, horizonDay: 730, reinvest: true, taxRegime: "iis_b", otherIncome: 0, rateShiftPct: 0 };
     const b = ok(calculate(amortising, market("2026-01-01"), plan)).plan;
     // Coupons 1,000 + 500; the 5,000 repaid on day 365 and the 1,000
     // coupon earn 10 percent for a year: 600. Redemption 5,000; commission
@@ -145,10 +145,18 @@ const abovePar: Issue = {
   amortization: [],
 };
 
+const aboveParPlan = (otherIncome: number): Plan => ({
+  amount: 11_100,
+  horizonDay: 547,
+  reinvest: false,
+  taxRegime: "standard",
+  otherIncome,
+  rateShiftPct: 0,
+});
+
 describe("tax", () => {
   it("nets the accrued interest paid and the loss against coupons", () => {
-    const plan: Plan = { amount: 11_100, horizonDay: 547, reinvest: false, taxRegime: "standard", taxRatePct: 13, rateShiftPct: 0 };
-    const b = ok(calculate(abovePar, market("2026-01-01"), plan)).plan;
+    const b = ok(calculate(abovePar, market("2026-01-01"), aboveParPlan(0))).plan;
     // Ten bonds: invested 11,001.369863, accrued interest 501.369863,
     // purchase commission 5.500685.
     // 2026: coupon 1,000 less the accrued interest paid: 498.630137.
@@ -159,5 +167,25 @@ describe("tax", () => {
     close(b.invested, 11_001.369_863_013_699);
     close(b.tax, -129.106_828_767_123_3);
     close(b.total, 11_865.392_486_301_369);
+  });
+});
+
+describe("tax rates", () => {
+  it("taxes 15 percent above 2.4 million a year", () => {
+    close(income_tax(1_000, 0), 130);
+    // 400,000 under the threshold at 13 percent, 600,000 at 15: 142,000.
+    close(income_tax(1_000_000, 2_000_000), 142_000);
+    close(income_tax(1_000, 3_000_000), 150);
+    close(income_tax(-500, 0), 0);
+    expect(TAX_THRESHOLD).toBe(2_400_000);
+  });
+
+  it("applies the threshold to each year", () => {
+    // Bases 498.630137 (2026) and 494.499315 (2027); with 2,399,700 of other
+    // income, 300 of each at 13 percent and the rest at 15: 68.794521 +
+    // 68.174897 = 136.969418.
+    const at = (other: number) => ok(calculate(abovePar, market("2026-01-01"), aboveParPlan(other))).plan.tax;
+    close(at(2_399_700), -136.969_417_808_219_2);
+    close(at(3_000_000), -148.969_417_808_219_16);
   });
 });

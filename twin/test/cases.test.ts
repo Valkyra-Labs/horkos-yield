@@ -42,8 +42,8 @@ function run(fn: string, args: unknown[]): unknown {
       return twin.floater_rate_path(n(x[0]), n(x[1]), n(x[2]), n(x[3]));
     case "floater_coupons":
       return twin.floater_coupons(n(x[0]), n(x[1]), a(x[2]), n(x[3]));
-    case "tax_amount":
-      return twin.tax_amount(n(x[0]), n(x[1]), n(x[2]), n(x[3]), n(x[4]));
+    case "income_tax":
+      return twin.income_tax(n(x[0]), n(x[1]));
     case "hold_value":
       return twin.hold_value(a(x[0]), a(x[1]), a(x[2]), n(x[3]), n(x[4]), n(x[5]));
     case "price_after_rate_shift":

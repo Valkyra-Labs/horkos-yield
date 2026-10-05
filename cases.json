@@ -226,19 +226,19 @@
     "expect": [44.87671232876713, 49.863013698630134]
   },
   {
-    "name": "tax: standard 13% on coupons and gain",
-    "fn": "tax_amount",
-    "args": [1000, 500, 13, 0, 100],
-    "expect": 195
-  },
-  {"name": "tax: loss is not netted", "fn": "tax_amount", "args": [1000,-500,13,0,100], "expect": 130},
-  {
-    "name": "tax: LDV exempts the gain after three years",
-    "fn": "tax_amount",
-    "args": [1000, 500, 13, 1, 1095],
+    "name": "income tax: 13% under the threshold",
+    "fn": "income_tax",
+    "args": [1000, 0],
     "expect": 130
   },
-  {"name": "tax: IIS type B pays nothing", "fn": "tax_amount", "args": [1000,500,15,2,10], "expect": 0},
+  {"name": "income tax: a negative base pays nothing", "fn": "income_tax", "args": [-500, 0], "expect": 0},
+  {
+    "name": "income tax: 15% on the part above 2.4 million with other income",
+    "fn": "income_tax",
+    "args": [1000000, 2000000],
+    "expect": 142000
+  },
+  {"name": "income tax: all at 15% above the threshold", "fn": "income_tax", "args": [1000, 3000000], "expect": 150},
   {
     "name": "hold: to maturity without reinvestment",
     "fn": "hold_value",
@@ -290,10 +290,10 @@
     "expect": "NaN"
   },
   {
-    "name": "tax: LDV one day short of three years taxes the gain",
-    "fn": "tax_amount",
-    "args": [1000, 500, 13, 1, 1094],
-    "expect": 195
+    "name": "income tax: NaN base propagates",
+    "fn": "income_tax",
+    "args": ["NaN", 0],
+    "expect": "NaN"
   },
   {
     "name": "shift: large rise floors the price at zero",
@@ -1241,7 +1241,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -1289,7 +1289,7 @@
     }
   },
   {
-    "name": "calculate: fixed, reinvested, standard 15, key rate up 2",
+    "name": "calculate: fixed, reinvested, standard, other income at the threshold, key rate up 2",
     "fn": "calculate",
     "args": [
       {
@@ -1310,7 +1310,7 @@
         "horizonDay": 365,
         "reinvest": true,
         "taxRegime": "standard",
-        "taxRatePct": 15,
+        "otherIncome": 2400000,
         "rateShiftPct": 2
       }
     ],
@@ -1379,7 +1379,7 @@
         "horizonDay": 300,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": -2
       }
     ],
@@ -1448,7 +1448,7 @@
         "horizonDay": 861,
         "reinvest": false,
         "taxRegime": "iis_b",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 3
       }
     ],
@@ -1517,7 +1517,7 @@
         "horizonDay": 1200,
         "reinvest": false,
         "taxRegime": "ldv",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -1586,7 +1586,7 @@
         "horizonDay": 1094,
         "reinvest": false,
         "taxRegime": "ldv",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -1662,7 +1662,7 @@
         "horizonDay": 1220,
         "reinvest": true,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -1738,7 +1738,7 @@
         "horizonDay": 500,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 1.5
       }
     ],
@@ -1807,7 +1807,7 @@
         "horizonDay": 730,
         "reinvest": true,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -1942,7 +1942,7 @@
         "horizonDay": 565,
         "reinvest": false,
         "taxRegime": "iis_b",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2051,7 +2051,7 @@
     }
   },
   {
-    "name": "calculate: floater with an offer, standard 15, key rate up 2",
+    "name": "calculate: floater with an offer, standard, other income at the threshold, key rate up 2",
     "fn": "calculate",
     "args": [
       {
@@ -2072,7 +2072,7 @@
         "horizonDay": 100,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 15,
+        "otherIncome": 2400000,
         "rateShiftPct": 2
       }
     ],
@@ -2233,7 +2233,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2338,7 +2338,7 @@
         "horizonDay": 60,
         "reinvest": false,
         "taxRegime": "ldv",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2438,7 +2438,7 @@
         "horizonDay": 10,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2538,7 +2538,7 @@
         "horizonDay": 900,
         "reinvest": true,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2607,7 +2607,7 @@
         "horizonDay": 400,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2707,7 +2707,7 @@
         "horizonDay": 1,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2776,7 +2776,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -2789,12 +2789,12 @@
           "reinvest": 0,
           "amort": 0,
           "body": 1007497887.8913085,
-          "tax": -16481835.806632262,
+          "tax": -18969502.85380645,
           "commission": -1003748.9234206544,
-          "total": 1110301475.5020776,
-          "profit": 110301516.55207753,
-          "periodPct": 11.030152107995498,
-          "annualPct": 11.030152107995495,
+          "total": 1107813808.4549034,
+          "profit": 107813849.50490332,
+          "periodPct": 10.781385393066202,
+          "annualPct": 10.781385393066213,
           "horizonDay": 365
         },
         "earlyExit": {
@@ -2807,12 +2807,12 @@
             "reinvest": 0,
             "amort": 0,
             "body": 1007497887.8913085,
-            "tax": -16481835.806632262,
+            "tax": -18969502.85380645,
             "commission": -1003748.9234206544,
-            "total": 1110301475.5020776,
-            "profit": 110301516.55207753,
-            "periodPct": 11.030152107995498,
-            "annualPct": 11.030152107995495,
+            "total": 1107813808.4549034,
+            "profit": 107813849.50490332,
+            "periodPct": 10.781385393066202,
+            "annualPct": 10.781385393066213,
             "horizonDay": 365
           },
           "diff": 0,
@@ -2850,7 +2850,7 @@
         "horizonDay": 120,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 1
       }
     ],
@@ -2955,7 +2955,7 @@
         "horizonDay": 200,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3085,7 +3085,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3113,7 +3113,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3141,7 +3141,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3169,7 +3169,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3197,7 +3197,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3225,7 +3225,7 @@
         "horizonDay": 0,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3253,7 +3253,7 @@
         "horizonDay": 0.5,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3281,7 +3281,7 @@
         "horizonDay": 862,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3309,7 +3309,7 @@
         "horizonDay": "NaN",
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3337,7 +3337,7 @@
         "horizonDay": 0,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3365,7 +3365,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3393,7 +3393,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3421,7 +3421,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3449,7 +3449,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "flat",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3477,7 +3477,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3505,7 +3505,7 @@
         "horizonDay": 365,
         "reinvest": false,
         "taxRegime": "standard",
-        "taxRatePct": 13,
+        "otherIncome": 0,
         "rateShiftPct": 0
       }
     ],
@@ -3570,5 +3570,130 @@
       [19, 20]
     ],
     "expect": 1000
+  },
+  {
+    "name": "calculate: above par to maturity, other income just under the threshold",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 105,
+        "accrued": null,
+        "couponType": "fixed",
+        "couponRatePct": 10,
+        "spreadPct": 0,
+        "periodDays": 365,
+        "maturity": "2027-07-02",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-01-01", "keyRatePct": 16},
+      {
+        "amount": 11100,
+        "horizonDay": 547,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "otherIncome": 2399700,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {
+      "ok": {
+        "plan": {
+          "qty": 10,
+          "invested": 11001.369863013699,
+          "coupons": 2000,
+          "reinvest": 0,
+          "amort": 0,
+          "body": 10000,
+          "tax": -136.9694178082192,
+          "commission": -5.50068493150685,
+          "total": 11857.529897260274,
+          "profit": 856.1600342465754,
+          "periodPct": 7.782303884945835,
+          "annualPct": 5.127937063579968,
+          "horizonDay": 547
+        },
+        "earlyExit": {
+          "rateShiftPct": 0,
+          "applicable": false,
+          "result": {
+            "qty": 10,
+            "invested": 11001.369863013699,
+            "coupons": 2000,
+            "reinvest": 0,
+            "amort": 0,
+            "body": 10000,
+            "tax": -136.9694178082192,
+            "commission": -5.50068493150685,
+            "total": 11857.529897260274,
+            "profit": 856.1600342465754,
+            "periodPct": 7.782303884945835,
+            "annualPct": 5.127937063579968,
+            "horizonDay": 547
+          },
+          "diff": 0,
+          "modDurationAtHorizon": 0
+        },
+        "floater": null,
+        "offer": null
+      }
+    }
+  },
+  {
+    "name": "calculate error: negative other income",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 105,
+        "accrued": null,
+        "couponType": "fixed",
+        "couponRatePct": 10,
+        "spreadPct": 0,
+        "periodDays": 365,
+        "maturity": "2027-07-02",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-01-01", "keyRatePct": 16},
+      {
+        "amount": 11100,
+        "horizonDay": 547,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "otherIncome": -1,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {"error": "invalid_other_income"}
+  },
+  {
+    "name": "calculate error: other income is checked after the horizon",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 105,
+        "accrued": null,
+        "couponType": "fixed",
+        "couponRatePct": 10,
+        "spreadPct": 0,
+        "periodDays": 365,
+        "maturity": "2027-07-02",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-01-01", "keyRatePct": 16},
+      {
+        "amount": 11100,
+        "horizonDay": 0,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "otherIncome": "NaN",
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {"error": "horizon_out_of_range"}
   }
 ]

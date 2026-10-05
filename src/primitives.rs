@@ -1,5 +1,5 @@
 //! Primitives on flat `f64` slices: pricing, yields, durations, cash-flow
-//! building, floater paths, tax and holding-period value.
+//! building, floater paths, income tax and holding-period value.
 //!
 //! Conventions:
 //! - Time is a day offset from the valuation date, ACT/365.
@@ -23,12 +23,17 @@ pub const OFFER_REDEEM: u32 = 1;
 /// rate.
 pub const OFFER_RATE_CHANGE: u32 = 2;
 
-/// `tax_amount` mode: coupons and positive capital gain are taxed.
-pub const TAX_STANDARD: u32 = 0;
-/// `tax_amount` mode: long-term holding relief (LDV).
-pub const TAX_LDV: u32 = 1;
-/// `tax_amount` mode: individual investment account of type B (IIS type B).
-pub const TAX_IIS_B: u32 = 2;
+/// Personal income tax rate on investment income up to [`TAX_THRESHOLD`]
+/// a year, percent.
+pub const TAX_RATE_PCT: f64 = 13.0;
+/// The rate above [`TAX_THRESHOLD`], percent.
+pub const TAX_HIGHER_RATE_PCT: f64 = 15.0;
+/// Investment income in a calendar year taxed at [`TAX_RATE_PCT`]; the
+/// rest of the year's investment income is taxed at
+/// [`TAX_HIGHER_RATE_PCT`]. The threshold is shared by all of a person's
+/// investment income: securities, dividends, deposit interest above the
+/// tax-free allowance, individual investment accounts.
+pub const TAX_THRESHOLD: f64 = 2_400_000.0;
 
 pub(crate) fn max_nan(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() {
@@ -214,32 +219,15 @@ pub fn floater_coupons(
         .collect()
 }
 
-/// Personal income tax on bond income.
-///
-/// - [`TAX_STANDARD`]: coupons and positive capital gain taxed at
-///   `rate_pct`.
-/// - [`TAX_LDV`]: the gain is exempt when the position is held for three
-///   years (1,095 days) or more; coupons are still taxed.
-/// - [`TAX_IIS_B`]: no tax at all.
-///
-/// Losses are not netted against coupons. An unknown mode taxes as
-/// [`TAX_STANDARD`].
-pub fn tax_amount(
-    coupon_income: f64,
-    capital_gain: f64,
-    rate_pct: f64,
-    mode: u32,
-    hold_days: f64,
-) -> f64 {
-    if mode == TAX_IIS_B {
-        return 0.0;
-    }
-    let gain_taxable = if mode == TAX_LDV && hold_days >= 3.0 * YEAR {
-        0.0
-    } else {
-        max_nan(capital_gain, 0.0)
-    };
-    (max_nan(coupon_income, 0.0) + gain_taxable) * rate_pct / 100.0
+/// Personal income tax on one calendar year's taxable `base` from this
+/// position, when the holder's other investment income that year is
+/// `other_income`: [`TAX_RATE_PCT`] on the part that, added to the other
+/// income, stays within [`TAX_THRESHOLD`], [`TAX_HIGHER_RATE_PCT`] on the
+/// rest. A base that is not positive pays nothing.
+pub fn income_tax(base: f64, other_income: f64) -> f64 {
+    let base = max_nan(base, 0.0);
+    let low = min_nan(max_nan(TAX_THRESHOLD - other_income, 0.0), base);
+    low * TAX_RATE_PCT / 100.0 + (base - low) * TAX_HIGHER_RATE_PCT / 100.0
 }
 
 /// What a holder collects by `horizon_day`, per one bond:
@@ -349,7 +337,7 @@ mod tests {
         assert!(ytm_effective(&[100.0], &[365.0], f64::NAN).is_nan());
         assert!(ytm_simple(&[100.0], &[0.0], 90.0).is_nan());
         assert!(accrued_interest(10.0, f64::NAN, 182.0).is_nan());
-        assert!(tax_amount(f64::NAN, 0.0, 13.0, TAX_STANDARD, 10.0).is_nan());
+        assert!(income_tax(f64::NAN, 0.0).is_nan());
         assert!(price_after_rate_shift(f64::NAN, 2.0, 1.0).is_nan());
     }
 
