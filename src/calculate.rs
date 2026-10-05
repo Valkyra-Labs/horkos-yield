@@ -1,12 +1,12 @@
 //! A plan for one issue: what the holder has at the horizon, the early exit
 //! under a key-rate shift, floater scenarios and the offer pair.
 
-use crate::date::{civil_from_days, parse_iso_date};
+use crate::date::{add_years, civil_from_days, full_years, parse_iso_date};
 use crate::issue::{derive_bond, CouponType, Derived, Error, Issue, Market, Schedule};
 use crate::primitives::{
-    build_cash_flow, floater_rate_path, hold_value, income_tax, max_nan, min_nan,
-    modified_duration, periodic_rate_pct, price_after_rate_shift, value_along_path, OFFER_NONE,
-    OFFER_RATE_CHANGE, YEAR,
+    build_cash_flow, floater_rate_path, hold_value, income_tax, min_nan, modified_duration,
+    periodic_rate_pct, price_after_rate_shift, value_along_path, OFFER_NONE, OFFER_RATE_CHANGE,
+    YEAR,
 };
 
 /// Brokerage commission in percent, charged on the purchase and on a sale
@@ -20,6 +20,11 @@ pub const FLOATER_SHIFTS_PCT: [f64; 3] = [-2.0, 0.0, 2.0];
 pub const FLOATER_RAMP_STEPS: u32 = 4;
 /// The largest amount a plan accepts.
 pub const MAX_AMOUNT: f64 = 1e9;
+/// Years a security must be held, and then some, for the long-term
+/// holding relief.
+pub const LDV_YEARS: i64 = 3;
+/// The relief exempts at most this much gain for each full year held.
+pub const LDV_CAP_PER_YEAR: f64 = 3_000_000.0;
 /// The shortest horizon, in days, whose return is annualised. Compounding
 /// a shorter period's return to a year turns small amounts, such as the
 /// commission, into large annual rates (one day of commission alone reads
@@ -28,23 +33,25 @@ pub const MAX_AMOUNT: f64 = 1e9;
 /// use (monthly coupons).
 pub const MIN_ANNUALISED_DAYS: f64 = 30.0;
 
-/// How income is taxed.
+/// The account the bonds are held in, which decides how income is taxed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaxRegime {
-    /// Coupons and positive gain taxed at the plan's rate.
+    /// An ordinary brokerage account: personal income tax on coupons and
+    /// on the result of redemptions and the sale, netted in each calendar
+    /// year, with the long-term holding relief applied to a gain on bonds
+    /// held for more than three years.
     Standard,
-    /// Long-term holding relief: the gain is exempt after three years.
-    Ldv,
-    /// Individual investment account of type B: no tax.
+    /// An individual investment account of type B, which only accounts
+    /// opened by the end of 2023 can be: income inside it is free of tax
+    /// when it is closed after at least three years. Taken here as no tax.
     IisB,
 }
 
 impl TaxRegime {
-    /// `"standard"`, `"ldv"` or `"iis_b"`.
+    /// `"standard"` or `"iis_b"`.
     pub fn code(self) -> &'static str {
         match self {
             TaxRegime::Standard => "standard",
-            TaxRegime::Ldv => "ldv",
             TaxRegime::IisB => "iis_b",
         }
     }
@@ -53,7 +60,6 @@ impl TaxRegime {
     pub fn from_code(code: &str) -> Option<TaxRegime> {
         match code {
             "standard" => Some(TaxRegime::Standard),
-            "ldv" => Some(TaxRegime::Ldv),
             "iis_b" => Some(TaxRegime::IisB),
             _ => None,
         }
@@ -286,6 +292,13 @@ impl Hold<'_> {
     ///   redemptions and the sale in proportion to the nominal each one
     ///   returns; the sale also bears its own commission.
     /// - Reinvestment income is taxed in the horizon's year.
+    /// - Long-term holding relief: a redemption or sale more than
+    ///   [`LDV_YEARS`] after the purchase, counted by calendar anniversary
+    ///   (the purchase settles on the valuation date, a sale on the
+    ///   horizon), is relieved: the year's positive relieved result is
+    ///   exempt up to [`LDV_CAP_PER_YEAR`] times the full years held,
+    ///   averaged over the year's relieved disposals weighted by what each
+    ///   returned. Coupons stay taxed.
     fn tax(
         &self,
         flows: &Schedule,
@@ -299,7 +312,12 @@ impl Hold<'_> {
         }
         let qty = self.qty;
         let year = |day: f64| civil_from_days(self.today + day.floor() as i64).0;
-        let relief = self.plan.tax_regime == TaxRegime::Ldv && horizon_day >= 3.0 * YEAR;
+        // Days from the purchase after which a disposal is relieved.
+        let relief_after = (add_years(self.today, LDV_YEARS) - self.today) as f64;
+        let held = |day: f64| -> Option<f64> {
+            (day.floor() > relief_after)
+                .then(|| full_years(self.today, self.today + day.floor() as i64) as f64)
+        };
         let mut years: Vec<TaxYear> = Vec::new();
         let first_coupon = match flows.days.first() {
             Some(&d) if d <= horizon_day => flows.coupons[0] * qty,
@@ -316,19 +334,31 @@ impl Hold<'_> {
             t.income += flows.coupons[i] * qty - if i == 0 { deducted } else { 0.0 };
             let p = flows.principals[i];
             if p > 0.0 {
-                t.book(p * qty - cost * p / self.nominal, relief);
+                t.book(p * qty - cost * p / self.nominal, p * qty, held(d));
                 repaid += p;
             }
         }
         let t = tax_year(&mut years, year(horizon_day));
         if sold > 0.0 {
             let left = (self.nominal - repaid) / self.nominal;
-            t.book(sold - sold * COMMISSION_PCT / 100.0 - cost * left, relief);
+            t.book(
+                sold - sold * COMMISSION_PCT / 100.0 - cost * left,
+                sold,
+                held(horizon_day),
+            );
         }
         t.income += reinvest;
         let mut tax = 0.0;
         for t in &years {
-            let base = t.income + t.result + t.relieved - max_nan(t.relieved, 0.0);
+            let exempt = if t.relieved > 0.0 {
+                min_nan(
+                    t.relieved,
+                    LDV_CAP_PER_YEAR * t.relieved_years / t.relieved_proceeds,
+                )
+            } else {
+                0.0
+            };
+            let base = t.income + t.result + t.relieved - exempt;
             tax += income_tax(base, self.plan.other_income);
         }
         tax
@@ -343,16 +373,24 @@ struct TaxYear {
     income: f64,
     /// Result of redemptions and the sale.
     result: f64,
-    /// The part of the result under the long-term holding relief.
+    /// The result of disposals under the long-term holding relief, what
+    /// they returned, and that weighted by the full years each was held.
     relieved: f64,
+    relieved_proceeds: f64,
+    relieved_years: f64,
 }
 
 impl TaxYear {
-    fn book(&mut self, result: f64, relief: bool) {
-        if relief {
-            self.relieved += result;
-        } else {
-            self.result += result;
+    /// Books a disposal's result; `held` is the full years held when the
+    /// disposal is under the long-term holding relief.
+    fn book(&mut self, result: f64, proceeds: f64, held: Option<f64>) {
+        match held {
+            Some(years) => {
+                self.relieved += result;
+                self.relieved_proceeds += proceeds;
+                self.relieved_years += years * proceeds;
+            }
+            None => self.result += result,
         }
     }
 }

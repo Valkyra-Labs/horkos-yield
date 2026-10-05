@@ -48,6 +48,31 @@ pub fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (y, m, d)
 }
 
+/// The date `years` calendar years after `days` (days since 1970-01-01):
+/// the same month and day, and 28 February for 29 February in a year that
+/// has none, where a period in years ends under the Tax Code (art. 6.1).
+pub fn add_years(days: i64, years: i64) -> i64 {
+    let (y, m, d) = civil_from_days(days);
+    let y = y + years;
+    let d = if m == 2 && d == 29 && !is_leap(y) {
+        28
+    } else {
+        d
+    };
+    days_from_civil(y, m, d)
+}
+
+/// Whole calendar years from `from` to `to` (days since 1970-01-01): the
+/// most anniversaries of `from` on or before `to`, zero when `to` is
+/// earlier.
+pub fn full_years(from: i64, to: i64) -> i64 {
+    let mut n = civil_from_days(to).0 - civil_from_days(from).0;
+    if n > 0 && add_years(from, n) > to {
+        n -= 1;
+    }
+    n.max(0)
+}
+
 fn is_leap(y: i64) -> bool {
     (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
@@ -83,6 +108,18 @@ mod tests {
         assert_eq!(parse_iso_date("0000-01-01"), Some(-719_528));
         assert_eq!(day_offset("2026-09-04", "2027-09-04"), Some(365));
         assert_eq!(day_offset("2027-09-04", "2028-09-04"), Some(366));
+    }
+
+    #[test]
+    fn anniversaries() {
+        let day = |s: &str| parse_iso_date(s).unwrap();
+        assert_eq!(add_years(day("2026-09-04"), 3), day("2029-09-04"));
+        assert_eq!(add_years(day("2024-02-29"), 1), day("2025-02-28"));
+        assert_eq!(add_years(day("2024-02-29"), 4), day("2028-02-29"));
+        assert_eq!(full_years(day("2026-09-04"), day("2029-09-03")), 2);
+        assert_eq!(full_years(day("2026-09-04"), day("2029-09-04")), 3);
+        assert_eq!(full_years(day("2026-09-04"), day("2026-09-03")), 0);
+        assert_eq!(full_years(day("2024-02-29"), day("2025-02-28")), 1);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 // the arithmetic in the comments. The same examples run against the Rust
 // crate in tests/worked.rs.
 import { describe, expect, it } from "vitest";
-import { MIN_ANNUALISED_DAYS, TAX_THRESHOLD, calculate, effective_annual_pct, hold_value, income_tax } from "../src/index.js";
+import { MIN_ANNUALISED_DAYS, TAX_THRESHOLD, calculate, dayOffset, effective_annual_pct, hold_value, income_tax } from "../src/index.js";
 import type { Calculation, Issue, Market, Plan } from "../src/index.js";
 
 const close = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThanOrEqual(1e-9 * Math.max(Math.abs(want), 1));
@@ -187,5 +187,57 @@ describe("tax rates", () => {
     const at = (other: number) => ok(calculate(abovePar, market("2026-01-01"), aboveParPlan(other))).plan.tax;
     close(at(2_399_700), -136.969_417_808_219_2);
     close(at(3_000_000), -148.969_417_808_219_16);
+  });
+});
+
+// A zero-coupon issue bought on 2026-09-04 and held to its maturity.
+function zeroCoupon(pricePct: number, maturity: string, amount = 9_000): [Issue, Market, Plan] {
+  const issue: Issue = {
+    nominal: 1000,
+    pricePct,
+    accrued: null,
+    couponType: "fixed",
+    couponRatePct: 0,
+    spreadPct: 0,
+    periodDays: 1097,
+    maturity,
+    offers: [],
+    amortization: [],
+  };
+  const m = market("2026-09-04");
+  const horizonDay = dayOffset(m.valuationDate, maturity)!;
+  return [issue, m, { amount, horizonDay, reinvest: false, taxRegime: "standard", otherIncome: 0, rateShiftPct: 0 }];
+}
+
+describe("long-term holding relief", () => {
+  it("starts the day after the third anniversary", () => {
+    // Three years from 2026-09-04 end on 2029-09-04, day 1,096. Ten bonds
+    // at 900: a gain of 10,000 - 9,004.5 = 995.5, taxed 129.415 on the
+    // anniversary and exempt a day later.
+    const [issue, m, plan] = zeroCoupon(90, "2029-09-04");
+    expect(plan.horizonDay).toBe(1096);
+    close(ok(calculate(issue, m, plan)).plan.tax, -129.415);
+    close(ok(calculate(...zeroCoupon(90, "2029-09-05"))).plan.tax, 0);
+  });
+
+  it("is capped at 3 million for each full year held", () => {
+    // 2,000,000 bonds at 500; gain 2,000,000,000 - 1,000,500,000 =
+    // 999,500,000; 9,000,000 exempt; 990,500,000 taxed: 312,000 + 15
+    // percent of 988,100,000 = 148,527,000.
+    const b = ok(calculate(...zeroCoupon(50, "2029-09-05", 1e9))).plan;
+    close(b.qty, 2_000_000);
+    close(b.tax, -148_527_000);
+    close(b.total, 1_850_973_000);
+  });
+
+  it("leaves coupons taxed", () => {
+    // 10 percent annual coupons on 2027-01-01, 2028-01-01, 2028-12-31 and
+    // 2029-12-31, ten bonds at 900: coupons taxed 4 x 130 = 520, the gain
+    // of 995.5 exempt. Total 4,000 + 10,000 - 520 - 4.5 = 13,475.5.
+    const issue: Issue = { ...abovePar, pricePct: 90, maturity: "2029-12-31" };
+    const plan: Plan = { amount: 9_000, horizonDay: 1460, reinvest: false, taxRegime: "standard", otherIncome: 0, rateShiftPct: 0 };
+    const b = ok(calculate(issue, market("2026-01-01"), plan)).plan;
+    close(b.tax, -520);
+    close(b.total, 13_475.5);
   });
 });

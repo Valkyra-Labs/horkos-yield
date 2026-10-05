@@ -1496,7 +1496,7 @@
     }
   },
   {
-    "name": "calculate: LDV held three years and more exempts the gain",
+    "name": "calculate: held more than three years, the gain is relieved",
     "fn": "calculate",
     "args": [
       {
@@ -1516,7 +1516,7 @@
         "amount": 100000,
         "horizonDay": 1200,
         "reinvest": false,
-        "taxRegime": "ldv",
+        "taxRegime": "standard",
         "otherIncome": 0,
         "rateShiftPct": 0
       }
@@ -1565,7 +1565,7 @@
     }
   },
   {
-    "name": "calculate: LDV held under three years taxes the gain",
+    "name": "calculate: held exactly three years, the gain is taxed",
     "fn": "calculate",
     "args": [
       {
@@ -1583,9 +1583,9 @@
       {"valuationDate": "2026-09-04", "keyRatePct": 16},
       {
         "amount": 100000,
-        "horizonDay": 1094,
+        "horizonDay": 1096,
         "reinvest": false,
-        "taxRegime": "ldv",
+        "taxRegime": "standard",
         "otherIncome": 0,
         "rateShiftPct": 0
       }
@@ -1598,14 +1598,14 @@
           "coupons": 34801.890410958906,
           "reinvest": 0,
           "amort": 0,
-          "body": 101238.47386581158,
-          "tax": -4700.3792543288855,
-          "commission": -100.51078193290579,
-          "total": 131239.47424050872,
-          "profit": 31456.38424050872,
-          "periodPct": 31.52476460741867,
-          "annualPct": 9.573475852449253,
-          "horizonDay": 1094
+          "body": 101306.810874683,
+          "tax": -4709.258623576592,
+          "commission": -100.5449504373415,
+          "total": 131298.89771162797,
+          "profit": 31515.807711627975,
+          "periodPct": 31.584317254184025,
+          "annualPct": 9.57171423224854,
+          "horizonDay": 1096
         },
         "earlyExit": {
           "rateShiftPct": 0,
@@ -1616,17 +1616,17 @@
             "coupons": 34801.890410958906,
             "reinvest": 0,
             "amort": 0,
-            "body": 101238.47386581158,
-            "tax": -4700.3792543288855,
-            "commission": -100.51078193290579,
-            "total": 131239.47424050872,
-            "profit": 31456.38424050872,
-            "periodPct": 31.52476460741867,
-            "annualPct": 9.573475852449253,
-            "horizonDay": 1094
+            "body": 101306.810874683,
+            "tax": -4709.258623576592,
+            "commission": -100.5449504373415,
+            "total": 131298.89771162797,
+            "profit": 31515.807711627975,
+            "periodPct": 31.584317254184025,
+            "annualPct": 9.57171423224854,
+            "horizonDay": 1096
           },
           "diff": 0,
-          "modDurationAtHorizon": 2.787051359917607
+          "modDurationAtHorizon": 2.7822067957253203
         },
         "floater": null,
         "offer": null
@@ -1675,12 +1675,12 @@
           "reinvest": 24696.015706433795,
           "amort": 84183.50000000001,
           "body": 16816.499999999978,
-          "tax": -6659.820582064472,
+          "tax": -6593.127189775249,
           "commission": -49.76219500000001,
-          "total": 144093.95851073918,
-          "profit": 44569.56851073916,
-          "periodPct": 44.78255883883253,
-          "annualPct": 11.70770764735991,
+          "total": 144160.6519030284,
+          "profit": 44636.26190302838,
+          "periodPct": 44.84957094741136,
+          "annualPct": 11.723173817569066,
           "horizonDay": 1220
         },
         "earlyExit": {
@@ -1693,12 +1693,12 @@
             "reinvest": 24696.015706433795,
             "amort": 84183.50000000001,
             "body": 16816.499999999978,
-            "tax": -6659.820582064472,
+            "tax": -6593.127189775249,
             "commission": -49.76219500000001,
-            "total": 144093.95851073918,
-            "profit": 44569.56851073916,
-            "periodPct": 44.78255883883253,
-            "annualPct": 11.70770764735991,
+            "total": 144160.6519030284,
+            "profit": 44636.26190302838,
+            "periodPct": 44.84957094741136,
+            "annualPct": 11.723173817569066,
             "horizonDay": 1220
           },
           "diff": 0,
@@ -2284,12 +2284,12 @@
             "reinvest": 0,
             "amort": 0,
             "body": 99000,
-            "tax": -8098.175080004798,
+            "tax": -7995.237152054797,
             "commission": -49.669785000000005,
-            "total": 153535.04938157057,
-            "profit": 54195.47938157058,
-            "periodPct": 54.55578213351495,
-            "annualPct": 13.556734470740682,
+            "total": 153637.98730952057,
+            "profit": 54298.41730952058,
+            "periodPct": 54.65940441409257,
+            "annualPct": 13.578960433748488,
             "horizonDay": 1250
           },
           "after": {
@@ -2299,12 +2299,12 @@
             "reinvest": 0,
             "amort": 0,
             "body": 99000,
-            "tax": -8178.39220329247,
+            "tax": -8075.454275342469,
             "commission": -49.669785000000005,
-            "total": 154071.88705280347,
-            "profit": 54732.31705280348,
-            "periodPct": 55.0961888125784,
-            "annualPct": 4.649221791031688,
+            "total": 154174.82498075347,
+            "profit": 54835.25498075348,
+            "periodPct": 55.199811093156015,
+            "annualPct": 4.65645934382708,
             "horizonDay": 3525
           }
         }
@@ -2312,7 +2312,7 @@
     }
   },
   {
-    "name": "calculate: monthly, amortisation and offer, LDV",
+    "name": "calculate: monthly, amortisation and offer, sixty days",
     "fn": "calculate",
     "args": [
       {
@@ -2337,7 +2337,7 @@
         "amount": 100000,
         "horizonDay": 60,
         "reinvest": false,
-        "taxRegime": "ldv",
+        "taxRegime": "standard",
         "otherIncome": 0,
         "rateShiftPct": 0
       }
@@ -2673,12 +2673,12 @@
             "reinvest": 0,
             "amort": 0,
             "body": 99000,
-            "tax": -5863.005156717128,
+            "tax": -5760.067228767127,
             "commission": -49.669785000000005,
-            "total": 138576.6045103377,
-            "profit": 39237.034510337704,
-            "periodPct": 39.49789042809195,
-            "annualPct": 3.5069270298096367,
+            "total": 138679.5424382877,
+            "profit": 39339.9724382877,
+            "periodPct": 39.601512708669574,
+            "annualPct": 3.514885765986575,
             "horizonDay": 3525
           }
         }
@@ -3695,5 +3695,171 @@
       }
     ],
     "expect": {"error": "horizon_out_of_range"}
+  },
+  {
+    "name": "calculate: sold the day after the third anniversary, the gain is relieved",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 95.64,
+        "accrued": 51.51,
+        "couponType": "fixed",
+        "couponRatePct": 11.75,
+        "spreadPct": 0,
+        "periodDays": 182,
+        "maturity": "2033-09-17",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16},
+      {
+        "amount": 100000,
+        "horizonDay": 1097,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "otherIncome": 0,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {
+      "ok": {
+        "plan": {
+          "qty": 99,
+          "invested": 99783.09,
+          "coupons": 34801.890410958906,
+          "reinvest": 0,
+          "amort": 0,
+          "body": 101340.99667524149,
+          "tax": -3861.3120534246573,
+          "commission": -100.56204333762075,
+          "total": 132181.01298943814,
+          "profit": 32397.922989438142,
+          "periodPct": 32.46835008761318,
+          "annualPct": 9.806950986634334,
+          "horizonDay": 1097
+        },
+        "earlyExit": {
+          "rateShiftPct": 0,
+          "applicable": true,
+          "result": {
+            "qty": 99,
+            "invested": 99783.09,
+            "coupons": 34801.890410958906,
+            "reinvest": 0,
+            "amort": 0,
+            "body": 101340.99667524149,
+            "tax": -3861.3120534246573,
+            "commission": -100.56204333762075,
+            "total": 132181.01298943814,
+            "profit": 32397.922989438142,
+            "periodPct": 32.46835008761318,
+            "annualPct": 9.806950986634334,
+            "horizonDay": 1097
+          },
+          "diff": 0,
+          "modDurationAtHorizon": 2.779784513629178
+        },
+        "floater": null,
+        "offer": null
+      }
+    }
+  },
+  {
+    "name": "calculate: relief capped at three million a year held",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 50,
+        "accrued": null,
+        "couponType": "fixed",
+        "couponRatePct": 0,
+        "spreadPct": 0,
+        "periodDays": 1097,
+        "maturity": "2029-09-05",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16},
+      {
+        "amount": 1000000000,
+        "horizonDay": 1097,
+        "reinvest": false,
+        "taxRegime": "standard",
+        "otherIncome": 0,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {
+      "ok": {
+        "plan": {
+          "qty": 2000000,
+          "invested": 1000000000,
+          "coupons": 0,
+          "reinvest": 0,
+          "amort": 0,
+          "body": 2000000000,
+          "tax": -148527000,
+          "commission": -500000,
+          "total": 1850973000,
+          "profit": 850973000,
+          "periodPct": 85.0973,
+          "annualPct": 22.73568687086296,
+          "horizonDay": 1097
+        },
+        "earlyExit": {
+          "rateShiftPct": 0,
+          "applicable": false,
+          "result": {
+            "qty": 2000000,
+            "invested": 1000000000,
+            "coupons": 0,
+            "reinvest": 0,
+            "amort": 0,
+            "body": 2000000000,
+            "tax": -148527000,
+            "commission": -500000,
+            "total": 1850973000,
+            "profit": 850973000,
+            "periodPct": 85.0973,
+            "annualPct": 22.73568687086296,
+            "horizonDay": 1097
+          },
+          "diff": 0,
+          "modDurationAtHorizon": 0
+        },
+        "floater": null,
+        "offer": null
+      }
+    }
+  },
+  {
+    "name": "calculate error: the ldv regime is no longer a code",
+    "fn": "calculate",
+    "args": [
+      {
+        "nominal": 1000,
+        "pricePct": 95.64,
+        "accrued": 51.51,
+        "couponType": "fixed",
+        "couponRatePct": 11.75,
+        "spreadPct": 0,
+        "periodDays": 182,
+        "maturity": "2033-09-17",
+        "offers": [],
+        "amortization": []
+      },
+      {"valuationDate": "2026-09-04", "keyRatePct": 16},
+      {
+        "amount": 100000,
+        "horizonDay": 1096,
+        "reinvest": false,
+        "taxRegime": "ldv",
+        "otherIncome": 0,
+        "rateShiftPct": 0
+      }
+    ],
+    "expect": {"error": "invalid_code"}
   }
 ]

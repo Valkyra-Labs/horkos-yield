@@ -60,7 +60,8 @@ mod wasm;
 pub use calculate::{
     calculate, effective_annual_pct, Breakdown, Calculation, EarlyExit, FloaterScenario,
     FloaterScenarios, OfferPair, Plan, TaxRegime, COMMISSION_PCT, FLOATER_RAMP_STEPS,
-    FLOATER_SHIFTS_PCT, MAX_AMOUNT, MIN_ANNUALISED_DAYS, WORST_CASE_COUPON_PCT,
+    FLOATER_SHIFTS_PCT, LDV_CAP_PER_YEAR, LDV_YEARS, MAX_AMOUNT, MIN_ANNUALISED_DAYS,
+    WORST_CASE_COUPON_PCT,
 };
 pub use issue::{
     coupon_schedule, derive_bond, Amortization, CouponType, Derived, Error, Event, Issue, Market,

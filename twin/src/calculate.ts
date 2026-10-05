@@ -4,7 +4,7 @@
   out.
 */
 
-import { civilFromDays, parseIsoDate } from "./dates.js";
+import { addYears, civilFromDays, fullYears, parseIsoDate } from "./dates.js";
 import { amountsOf, derive_bond, isCouponType, scheduleFromTriples } from "./issue.js";
 import {
   OFFER_NONE,
@@ -38,11 +38,14 @@ export const WORST_CASE_COUPON_PCT = 0.1;
 export const FLOATER_SHIFTS_PCT: readonly number[] = [-2, 0, 2];
 export const FLOATER_RAMP_STEPS = 4;
 export const MAX_AMOUNT = 1e9;
+/* Long-term holding relief: held more than this many years, at most the cap per full year held */
+export const LDV_YEARS = 3;
+export const LDV_CAP_PER_YEAR = 3_000_000;
 /* The shortest horizon, in days, whose return is annualised */
 export const MIN_ANNUALISED_DAYS = 30;
 
 function isTaxRegime(code: unknown): code is TaxRegime {
-  return code === "standard" || code === "ldv" || code === "iis_b";
+  return code === "standard" || code === "iis_b";
 }
 
 /*
@@ -133,8 +136,12 @@ function breakdownOf(
   };
 }
 
-/* One calendar year of the tax base */
-type TaxYear = { year: number; income: number; result: number; relieved: number };
+/*
+  One calendar year of the tax base; relieved is the result of disposals
+  under the long-term holding relief, with what they returned and that
+  weighted by the full years each was held
+*/
+type TaxYear = { year: number; income: number; result: number; relieved: number; relievedProceeds: number; relievedYears: number };
 
 /*
   Personal income tax summed over the calendar years the position pays in.
@@ -144,25 +151,35 @@ type TaxYear = { year: number; income: number; result: number; relieved: number 
   to that coupon) and the cost; the cost with the purchase commission is
   spread over redemptions and the sale by the nominal each returns; the
   sale bears its own commission; reinvestment income falls in the
-  horizon's year.
+  horizon's year. A redemption or sale more than three years after the
+  purchase by calendar anniversary is relieved: the year's positive relieved
+  result is exempt up to 3 million times the full years held, averaged over
+  the relieved disposals weighted by what each returned; coupons stay taxed.
 */
 function taxOf(h: Holding, flows: Schedule, horizonDay: number, reinvest: number, invested: number, sold: number): number {
   if (h.plan.taxRegime === "iis_b") return 0;
   const { qty } = h;
   const yearOf = (day: number) => civilFromDays(h.today + Math.floor(day))[0];
-  const relief = h.plan.taxRegime === "ldv" && horizonDay >= 3 * YEAR;
+  const reliefAfter = addYears(h.today, LDV_YEARS) - h.today;
+  const held = (day: number): number | null =>
+    Math.floor(day) > reliefAfter ? fullYears(h.today, h.today + Math.floor(day)) : null;
   const years: TaxYear[] = [];
   const entry = (year: number): TaxYear => {
     let t = years.find((x) => x.year === year);
     if (!t) {
-      t = { year, income: 0, result: 0, relieved: 0 };
+      t = { year, income: 0, result: 0, relieved: 0, relievedProceeds: 0, relievedYears: 0 };
       years.push(t);
     }
     return t;
   };
-  const book = (t: TaxYear, result: number) => {
-    if (relief) t.relieved += result;
-    else t.result += result;
+  const book = (t: TaxYear, result: number, proceeds: number, years: number | null) => {
+    if (years === null) {
+      t.result += result;
+    } else {
+      t.relieved += result;
+      t.relievedProceeds += proceeds;
+      t.relievedYears += years * proceeds;
+    }
   };
   const firstDay = flows.days[0];
   const firstCoupon = firstDay !== undefined && firstDay <= horizonDay ? (flows.coupons[0] as number) * qty : 0;
@@ -176,16 +193,17 @@ function taxOf(h: Holding, flows: Schedule, horizonDay: number, reinvest: number
     t.income += (flows.coupons[i] as number) * qty - (i === 0 ? deducted : 0);
     const p = flows.principals[i] as number;
     if (p > 0) {
-      book(t, p * qty - (cost * p) / h.nominal);
+      book(t, p * qty - (cost * p) / h.nominal, p * qty, held(d));
       repaid += p;
     }
   }
   const t = entry(yearOf(horizonDay));
-  if (sold > 0) book(t, sold - (sold * COMMISSION_PCT) / 100 - cost * ((h.nominal - repaid) / h.nominal));
+  if (sold > 0) book(t, sold - (sold * COMMISSION_PCT) / 100 - cost * ((h.nominal - repaid) / h.nominal), sold, held(horizonDay));
   t.income += reinvest;
   let tax = 0;
   for (const y of years) {
-    const base = y.income + y.result + y.relieved - Math.max(y.relieved, 0);
+    const exempt = y.relieved > 0 ? Math.min(y.relieved, (LDV_CAP_PER_YEAR * y.relievedYears) / y.relievedProceeds) : 0;
+    const base = y.income + y.result + y.relieved - exempt;
     tax += income_tax(base, h.plan.otherIncome);
   }
   return tax;

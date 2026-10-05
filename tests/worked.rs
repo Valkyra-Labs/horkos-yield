@@ -279,3 +279,101 @@ fn the_threshold_applies_to_each_year() {
     // All of it at 15 percent: 0.15 x 993.129452 = 148.969418.
     assert_close!(at(3_000_000.0), -148.969_417_808_219_16);
 }
+
+// A zero-coupon issue bought at `price_pct` on 2026-09-04 and held to its
+// maturity: no coupons, so the redemption result is the whole tax base.
+fn zero_coupon(price_pct: f64, maturity: &str) -> (Issue, Plan, Market) {
+    let issue = Issue {
+        nominal: 1000.0,
+        price_pct,
+        accrued: None,
+        coupon_type: CouponType::Fixed,
+        coupon_rate_pct: 0.0,
+        spread_pct: 0.0,
+        period_days: 1097.0,
+        maturity: maturity.into(),
+        offers: vec![],
+        amortization: vec![],
+    };
+    let m = market("2026-09-04");
+    let day = date::day_offset(&m.valuation_date, maturity).unwrap() as f64;
+    let plan = Plan {
+        amount: 9_000.0,
+        horizon_day: day,
+        reinvest: false,
+        tax_regime: TaxRegime::Standard,
+        other_income: 0.0,
+        rate_shift_pct: 0.0,
+    };
+    (issue, plan, m)
+}
+
+#[test]
+fn long_term_relief_starts_the_day_after_the_third_anniversary() {
+    // Bought on 2026-09-04: three years end on 2029-09-04 (day 1,096, as
+    // 2028 has 29 February), and the relief needs more than three years.
+    // Ten bonds at 900: cost 9,000 + 4.5 commission, redemption 10,000, a
+    // gain of 995.5.
+    let (issue, plan, m) = zero_coupon(90.0, "2029-09-04");
+    assert_eq!(plan.horizon_day, 1096.0);
+    let b = calculate(&issue, &m, &plan).unwrap().plan;
+    // Redeemed on the anniversary: 13 percent of 995.5 = 129.415.
+    assert_close!(b.tax, -129.415);
+    let (issue, plan, m) = zero_coupon(90.0, "2029-09-05");
+    let b = calculate(&issue, &m, &plan).unwrap().plan;
+    // A day later the gain is exempt.
+    assert_close!(b.tax, 0.0);
+}
+
+#[test]
+fn long_term_relief_is_capped_at_3_million_a_year_held() {
+    // 1,000,000,000 at 500 a bond buys 2,000,000 bonds; commission 500,000;
+    // the redemption returns 2,000,000,000, a gain of 999,500,000. Held
+    // three full years, at most 3 x 3,000,000 = 9,000,000 is exempt;
+    // 990,500,000 is taxed: 13 percent of 2,400,000 = 312,000 and 15 of
+    // the remaining 988,100,000 = 148,215,000, 148,527,000 in all.
+    let (issue, plan, m) = zero_coupon(50.0, "2029-09-05");
+    let plan = Plan {
+        amount: 1e9,
+        ..plan
+    };
+    let b = calculate(&issue, &m, &plan).unwrap().plan;
+    assert_close!(b.qty, 2_000_000.0);
+    assert_close!(b.tax, -148_527_000.0);
+    assert_close!(b.total, 1_850_973_000.0);
+}
+
+#[test]
+fn long_term_relief_leaves_coupons_taxed() {
+    // 10 percent annual coupons from 2026-01-01 to 2029-12-31 (day 1,460),
+    // coupons on days 365, 730, 1,095 and 1,460: 2027-01-01, 2028-01-01,
+    // 2028-12-31 and 2029-12-31. Ten bonds at 900.
+    let issue = Issue {
+        nominal: 1000.0,
+        price_pct: 90.0,
+        accrued: None,
+        coupon_type: CouponType::Fixed,
+        coupon_rate_pct: 10.0,
+        spread_pct: 0.0,
+        period_days: 365.0,
+        maturity: "2029-12-31".into(),
+        offers: vec![],
+        amortization: vec![],
+    };
+    let plan = Plan {
+        amount: 9_000.0,
+        horizon_day: 1460.0,
+        reinvest: false,
+        tax_regime: TaxRegime::Standard,
+        other_income: 0.0,
+        rate_shift_pct: 0.0,
+    };
+    let b = calculate(&issue, &market("2026-01-01"), &plan)
+        .unwrap()
+        .plan;
+    // Every coupon, the last one too, is taxed: 4 x 1,000 x 13 percent =
+    // 520. The redemption gain, 10,000 - 9,004.5 = 995.5, is exempt. Total
+    // 4,000 + 10,000 - 520 - 4.5 = 13,475.5.
+    assert_close!(b.tax, -520.0);
+    assert_close!(b.total, 13_475.5);
+}

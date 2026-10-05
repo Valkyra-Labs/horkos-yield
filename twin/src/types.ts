@@ -22,7 +22,12 @@ export type ErrorCode =
 export type Result<T> = { ok: T } | { error: ErrorCode };
 
 export type CouponType = "fixed" | "floater";
-export type TaxRegime = "standard" | "ldv" | "iis_b";
+/*
+  standard: an ordinary brokerage account, with the long-term holding relief
+  applied by itself; iis_b: an individual investment account of type B
+  (accounts opened by the end of 2023), taken as no tax
+*/
+export type TaxRegime = "standard" | "iis_b";
 export type EventKind = "offer" | "maturity";
 
 export type Amortization = {
