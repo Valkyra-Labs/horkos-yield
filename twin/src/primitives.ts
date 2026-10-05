@@ -39,6 +39,11 @@ export function ytm_effective(amounts: Num, days: Num, price: number): number {
   return 0.5 * (lo + hi);
 }
 
+/*
+  Simple yield over the full term: all flows less the price, over the price,
+  divided by the years to the last flow; not compounded, so below the yield
+  to maturity for an amortising issue.
+*/
 export function ytm_simple(amounts: Num, days: Num, price: number): number {
   if (amounts.length === 0 || !(price > 0)) return Number.NaN;
   let total = 0;
@@ -151,7 +156,11 @@ export function tax_amount(
   return ((Math.max(couponIncome, 0) + gainTaxable) * ratePct) / 100;
 }
 
-/* [coupons, reinvest income, amortisation, final principal, sale price] per bond */
+/*
+  [coupons, reinvest income, amortisation, final principal, sale price] per
+  bond; coupons and principal paid by the horizon are reinvested at
+  reinvestRate when it is positive.
+*/
 export function hold_value(
   days: Num,
   coupons: Num,
@@ -174,7 +183,7 @@ export function hold_value(
     if (d <= horizonDay) {
       couponsSum += c;
       if (reinvestRate > 0) {
-        reinvest += c * (Math.pow(1 + reinvestRate, (horizonDay - d) / YEAR) - 1);
+        reinvest += (c + p) * (Math.pow(1 + reinvestRate, (horizonDay - d) / YEAR) - 1);
       }
       if (Math.abs(d - last) < 0.5) fin += p;
       else amort += p;

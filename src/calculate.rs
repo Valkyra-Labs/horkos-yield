@@ -67,7 +67,8 @@ pub struct Plan {
     pub amount: f64,
     /// Day offset of the horizon, from 1 to the maturity day.
     pub horizon_day: f64,
-    /// Reinvest coupons at the yield to maturity until the horizon.
+    /// Reinvest coupons and principal repaid before the horizon at the
+    /// yield to maturity until the horizon.
     pub reinvest: bool,
     pub tax_regime: TaxRegime,
     /// Tax rate in percent (13 or 15 for individuals).
@@ -89,7 +90,7 @@ pub struct Breakdown {
     /// Paid for them at the dirty price.
     pub invested: f64,
     pub coupons: f64,
-    /// Income from reinvested coupons.
+    /// Income from reinvested coupons and repaid principal.
     pub reinvest: f64,
     /// Principal repaid before the final redemption.
     pub amort: f64,
@@ -334,7 +335,8 @@ fn floater_path(
 /// with the plan's key-rate change, the floater scenarios and the offer
 /// pair.
 ///
-/// Coupons are reinvested, when the plan asks, at the yield to maturity;
+/// Coupons and principal repaid before the horizon are reinvested, when
+/// the plan asks, at the yield to maturity;
 /// flows after the horizon are sold at the yield to maturity. Tax treats
 /// the horizon as the holding period.
 ///

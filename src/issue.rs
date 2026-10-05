@@ -215,7 +215,9 @@ pub struct Derived {
     pub ytm_maturity: f64,
     /// Annual effective yield to the nearest offer.
     pub ytm_offer: Option<f64>,
-    /// Simple annualised yield to maturity.
+    /// Simple yield over the full term, not compounded (see
+    /// [`ytm_simple`](crate::primitives::ytm_simple)): below the yield to
+    /// maturity for an amortising issue.
     pub ytm_simple: f64,
     /// The nearest redemption event: the offer when there is one.
     pub event: Event,

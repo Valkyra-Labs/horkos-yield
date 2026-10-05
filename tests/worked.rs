@@ -92,3 +92,73 @@ fn floater_scenarios_keep_the_price_at_par() {
     assert_close!(s[2].breakdown.body, 10_000.0);
     assert_close!(s[2].breakdown.total, 11_840.0);
 }
+
+// Two years, 10 percent annual coupons, half the nominal repaid with the
+// first coupon: valuation 2026-01-01, coupons on day 365 (2027-01-01) and
+// day 730 (2028-01-01), bought at par with no accrued interest. Per bond
+// the flows are 100 + 500 = 600 and then 10 percent of the 500 left, 50 +
+// 500 = 550, so the yield is 10 percent: 600 / 1.1 + 550 / 1.21 = 1,000.
+fn amortising() -> Issue {
+    Issue {
+        nominal: 1000.0,
+        price_pct: 100.0,
+        accrued: None,
+        coupon_type: CouponType::Fixed,
+        coupon_rate_pct: 10.0,
+        spread_pct: 0.0,
+        period_days: 365.0,
+        maturity: "2028-01-01".into(),
+        offers: vec![],
+        amortization: vec![Amortization {
+            date: "2027-01-01".into(),
+            fraction_pct: 50.0,
+        }],
+    }
+}
+
+#[test]
+fn hold_value_reinvests_returned_principal() {
+    // Coupon 100 and principal 500 on day 365, reinvested at 10 percent for
+    // the year to day 730: 600 x 0.1 = 60.
+    let hv = hold_value(
+        &[365.0, 730.0],
+        &[100.0, 50.0],
+        &[500.0, 500.0],
+        730.0,
+        0.1,
+        0.1,
+    );
+    assert_close!(hv[0], 150.0);
+    assert_close!(hv[1], 60.0);
+    assert_close!(hv[2], 500.0);
+    assert_close!(hv[3], 500.0);
+    assert_close!(hv[4], 0.0);
+}
+
+#[test]
+fn amortising_plan_earns_about_its_yield() {
+    let plan = Plan {
+        amount: 10_000.0,
+        horizon_day: 730.0,
+        reinvest: true,
+        tax_regime: TaxRegime::IisB,
+        tax_rate_pct: 13.0,
+        rate_shift_pct: 0.0,
+    };
+    let b = calculate(&amortising(), &market("2026-01-01"), &plan)
+        .unwrap()
+        .plan;
+    // Ten bonds for 10,000. Coupons 1,000 + 500; the 5,000 repaid on day
+    // 365 and the 1,000 coupon both earn 10 percent for a year: 600.
+    // Final redemption 5,000; commission 0.05 percent of 10,000 = 5.
+    // Total 1,500 + 600 + 5,000 + 5,000 - 5 = 12,095, and the effective
+    // annual return is sqrt(1.2095) - 1 = 9.977 percent: the yield, less the
+    // commission. With the repaid principal left idle it was
+    // sqrt(1.1595) - 1 = 7.68 percent.
+    assert_close!(b.coupons, 1_500.0);
+    assert_close!(b.reinvest, 600.0);
+    assert_close!(b.amort, 5_000.0);
+    assert_close!(b.body, 5_000.0);
+    assert_close!(b.total, 12_095.0);
+    assert_close!(b.annual_pct, 9.977_270_378_928_749);
+}

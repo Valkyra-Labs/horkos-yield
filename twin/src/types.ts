@@ -60,6 +60,7 @@ export type Plan = {
   amount: number;
   /* Day offset of the horizon, 1 to the maturity day */
   horizonDay: number;
+  /* Reinvest coupons and principal repaid by the horizon at the yield to maturity */
   reinvest: boolean;
   taxRegime: TaxRegime;
   taxRatePct: number;

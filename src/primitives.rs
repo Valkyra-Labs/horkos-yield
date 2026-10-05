@@ -81,9 +81,12 @@ pub fn ytm_effective(amounts: &[f64], days: &[f64], price: f64) -> f64 {
     0.5 * (lo + hi)
 }
 
-/// Simple (non-compounded) annualised yield: total gain over price scaled
-/// to a year by the day of the last flow. NaN when there are no flows, the
-/// price is not positive or the last flow is not in the future.
+/// Simple yield over the full term: all flows less the price, as a share
+/// of the price, divided by the years to the last flow. Not compounded,
+/// and it counts the money as invested until the last flow, so for an
+/// amortising issue, whose principal comes back earlier, it is well below
+/// the yield to maturity. NaN when there are no flows, the price is not
+/// positive or the last flow is not in the future.
 pub fn ytm_simple(amounts: &[f64], days: &[f64], price: f64) -> f64 {
     if amounts.is_empty() || price.is_nan() || price <= 0.0 {
         return f64::NAN;
@@ -242,11 +245,12 @@ pub fn tax_amount(
 /// What a holder collects by `horizon_day`, per one bond:
 /// `[coupons, reinvest_income, amortisation, final_principal, sale_price]`.
 ///
-/// Coupons paid on or before the horizon are collected and, when
-/// `reinvest_rate > 0`, reinvested at that annual effective rate until the
-/// horizon. Principal paid on the last flow day counts as final redemption,
-/// earlier principal as amortisation. Flows after the horizon are sold as a
-/// dirty price discounted to the horizon at `exit_yield`.
+/// Coupons and principal paid on or before the horizon are collected and,
+/// when `reinvest_rate > 0`, reinvested at that annual effective rate until
+/// the horizon; `reinvest_income` is what that reinvestment earns.
+/// Principal paid on the last flow day counts as final redemption, earlier
+/// principal as amortisation. Flows after the horizon are sold as a dirty
+/// price discounted to the horizon at `exit_yield`.
 pub fn hold_value(
     days: &[f64],
     coupons: &[f64],
@@ -267,7 +271,7 @@ pub fn hold_value(
         if d <= horizon_day {
             coupons_sum += c;
             if reinvest_rate > 0.0 {
-                reinvest += c * ((1.0 + reinvest_rate).powf((horizon_day - d) / YEAR) - 1.0);
+                reinvest += (c + p) * ((1.0 + reinvest_rate).powf((horizon_day - d) / YEAR) - 1.0);
             }
             if (d - last).abs() < 0.5 {
                 fin += p;

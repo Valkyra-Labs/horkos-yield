@@ -2,7 +2,7 @@
 // the arithmetic in the comments. The same examples run against the Rust
 // crate in tests/worked.rs.
 import { describe, expect, it } from "vitest";
-import { calculate } from "../src/index.js";
+import { calculate, hold_value } from "../src/index.js";
 import type { Calculation, Issue, Market, Plan } from "../src/index.js";
 
 const close = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThanOrEqual(1e-9 * Math.max(Math.abs(want), 1));
@@ -71,5 +71,45 @@ describe("floaters", () => {
     // +2: 16.5 then 17 percent; coupons 185 and 190; 1,190 / 1.19 = 1,000.
     close(s[2]!.breakdown.body, 10_000);
     close(s[2]!.breakdown.total, 11_840);
+  });
+});
+
+// Two years, 10 percent annual coupons, half the nominal repaid with the
+// first coupon: valuation 2026-01-01, coupons on day 365 and day 730,
+// bought at par with no accrued interest. Per bond the flows are 100 + 500
+// = 600 and 50 + 500 = 550, so the yield is 10 percent: 600 / 1.1 + 550 /
+// 1.21 = 1,000.
+const amortising: Issue = {
+  nominal: 1000,
+  pricePct: 100,
+  accrued: null,
+  couponType: "fixed",
+  couponRatePct: 10,
+  spreadPct: 0,
+  periodDays: 365,
+  maturity: "2028-01-01",
+  offers: [],
+  amortization: [{ date: "2027-01-01", fractionPct: 50 }],
+};
+
+describe("amortisation", () => {
+  it("reinvests returned principal with the coupons", () => {
+    // Coupon 100 and principal 500 on day 365 at 10 percent for a year: 60.
+    const hv = hold_value([365, 730], [100, 50], [500, 500], 730, 0.1, 0.1);
+    expect(Array.from(hv).map((x) => Math.round(x * 1e9) / 1e9)).toEqual([150, 60, 500, 500, 0]);
+  });
+
+  it("earns about the yield on an amortising plan", () => {
+    const plan: Plan = { amount: 10_000, horizonDay: 730, reinvest: true, taxRegime: "iis_b", taxRatePct: 13, rateShiftPct: 0 };
+    const b = ok(calculate(amortising, market("2026-01-01"), plan)).plan;
+    // Coupons 1,000 + 500; the 5,000 repaid on day 365 and the 1,000
+    // coupon earn 10 percent for a year: 600. Redemption 5,000; commission
+    // 5. Total 12,095; annual sqrt(1.2095) - 1 = 9.977 percent.
+    close(b.coupons, 1_500);
+    close(b.reinvest, 600);
+    close(b.amort, 5_000);
+    close(b.body, 5_000);
+    close(b.total, 12_095);
+    close(b.annualPct, 9.977_270_378_928_749);
   });
 });
