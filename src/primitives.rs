@@ -281,6 +281,44 @@ pub fn hold_value(
     [coupons_sum, reinvest, amort, fin, sale]
 }
 
+/// The rate in percent, compounded once every `period_days`, that equals
+/// the annual effective yield `y`: `((1 + y)^(period / 365) - 1) * 365 /
+/// period * 100`. A floater's coupon is quoted in this convention, so the
+/// difference between this rate and the key rate is the spread the market
+/// asks of the issue.
+pub fn periodic_rate_pct(y: f64, period_days: f64) -> f64 {
+    ((1.0 + y).powf(period_days / YEAR) - 1.0) * YEAR / period_days * 100.0
+}
+
+/// Value at `horizon_day` of the flows after it, discounted period by
+/// period: the flow on `days[i]` is discounted over its period at
+/// `rates_pct[i]`, compounded once every `period_days`, and the first
+/// period after the horizon only for the part of it that is left. With
+/// the same rate in every period this is the value at the annual effective
+/// yield that [`periodic_rate_pct`] converts from. `days` are the flow
+/// days, ascending and a period apart; a missing rate is zero.
+pub fn value_along_path(
+    days: &[f64],
+    amounts: &[f64],
+    horizon_day: f64,
+    period_days: f64,
+    rates_pct: &[f64],
+) -> f64 {
+    let mut factor = 1.0;
+    let mut from = horizon_day;
+    let mut pv = 0.0;
+    for (i, &d) in days.iter().enumerate() {
+        if d <= horizon_day {
+            continue;
+        }
+        let rate = rates_pct.get(i).copied().unwrap_or(0.0);
+        factor *= (1.0 + rate / 100.0 * period_days / YEAR).powf(-(d - from) / period_days);
+        from = d;
+        pv += amounts.get(i).copied().unwrap_or(0.0) * factor;
+    }
+    pv
+}
+
 /// First-order price change from a parallel shift of the rate curve:
 /// `price * (1 - modified_duration * delta)`, floored at zero.
 pub fn price_after_rate_shift(price: f64, mod_duration: f64, delta_pct: f64) -> f64 {

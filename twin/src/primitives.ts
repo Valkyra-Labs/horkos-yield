@@ -185,6 +185,32 @@ export function hold_value(
   return Float64Array.from([couponsSum, reinvest, amort, fin, sale]);
 }
 
+/* The rate in percent compounded once a period that equals the annual effective yield y */
+export function periodic_rate_pct(y: number, periodDays: number): number {
+  return ((Math.pow(1 + y, periodDays / YEAR) - 1) * YEAR) / periodDays * 100;
+}
+
+/*
+  Value at horizonDay of the flows after it, discounted period by period at
+  ratesPct[i] (compounded once a period) over the period that ends on
+  days[i], the first one only for the part left after the horizon. A
+  missing rate is zero.
+*/
+export function value_along_path(days: Num, amounts: Num, horizonDay: number, periodDays: number, ratesPct: Num): number {
+  let factor = 1;
+  let from = horizonDay;
+  let pv = 0;
+  for (let i = 0; i < days.length; i++) {
+    const d = at(days, i);
+    if (d <= horizonDay) continue;
+    const rate = i < ratesPct.length ? at(ratesPct, i) : 0;
+    factor *= Math.pow(1 + ((rate / 100) * periodDays) / YEAR, -(d - from) / periodDays);
+    from = d;
+    pv += (i < amounts.length ? at(amounts, i) : 0) * factor;
+  }
+  return pv;
+}
+
 export function price_after_rate_shift(price: number, modDuration: number, deltaPct: number): number {
   return Math.max(price * (1 - (modDuration * deltaPct) / 100), 0);
 }

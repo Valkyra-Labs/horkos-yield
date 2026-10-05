@@ -63,7 +63,7 @@ export type Plan = {
   reinvest: boolean;
   taxRegime: TaxRegime;
   taxRatePct: number;
-  /* Parallel key-rate shift for the early exit, percentage points */
+  /* Key-rate change by the horizon for the early exit, percentage points */
   rateShiftPct: number;
 };
 
@@ -113,7 +113,8 @@ export type EarlyExit = {
   applicable: boolean;
   result: Breakdown;
   diff: number;
-  modDurationAtHorizon: number;
+  /* Fixed coupons only; null for a floater, whose sale is not priced by duration */
+  modDurationAtHorizon: number | null;
 };
 
 export type FloaterScenario = { shiftPct: number; breakdown: Breakdown; coupons: number[] };

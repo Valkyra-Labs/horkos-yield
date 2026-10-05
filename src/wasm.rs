@@ -121,6 +121,22 @@ pub fn hold_value(
 }
 
 #[wasm_bindgen]
+pub fn periodic_rate_pct(y: f64, period_days: f64) -> f64 {
+    p::periodic_rate_pct(y, period_days)
+}
+
+#[wasm_bindgen]
+pub fn value_along_path(
+    days: &[f64],
+    amounts: &[f64],
+    horizon_day: f64,
+    period_days: f64,
+    rates_pct: &[f64],
+) -> f64 {
+    p::value_along_path(days, amounts, horizon_day, period_days, rates_pct)
+}
+
+#[wasm_bindgen]
 pub fn price_after_rate_shift(price: f64, mod_duration: f64, delta_pct: f64) -> f64 {
     p::price_after_rate_shift(price, mod_duration, delta_pct)
 }
@@ -380,7 +396,7 @@ pub struct JsEarlyExit {
     pub result: JsBreakdown,
     pub diff: f64,
     #[wasm_bindgen(js_name = modDurationAtHorizon)]
-    pub mod_duration_at_horizon: f64,
+    pub mod_duration_at_horizon: Option<f64>,
 }
 
 #[wasm_bindgen(js_name = FloaterScenario, getter_with_clone)]

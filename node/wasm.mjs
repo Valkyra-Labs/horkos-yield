@@ -107,7 +107,7 @@ export function wrap(w) {
         applicable: e.applicable,
         result: breakdown(e.result),
         diff: e.diff,
-        modDurationAtHorizon: e.modDurationAtHorizon,
+        modDurationAtHorizon: e.modDurationAtHorizon ?? null,
       },
       floater:
         f === undefined

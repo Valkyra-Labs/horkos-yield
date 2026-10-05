@@ -16,8 +16,10 @@ import {
   floater_rate_path,
   hold_value,
   modified_duration,
+  periodic_rate_pct,
   price_after_rate_shift,
   tax_amount,
+  value_along_path,
 } from "./primitives.js";
 import type {
   Breakdown,
@@ -63,31 +65,44 @@ export function effective_annual_pct(invested: number, total: number, horizonDay
 type Holding = {
   qty: number;
   dirtyPrice: number;
+  periodDays: number;
   reinvestRate: number;
   exitYield: number;
   plan: Plan;
 };
 
+/*
+  How the flows after the horizon are sold: at the exit yield moved by the
+  modified duration for a key-rate shift (a fixed coupon), or discounted
+  along a path of per-period rates (a floater).
+*/
+type Sale = { shiftPct: number } | { pathPct: readonly number[] };
+
 function breakdownOf(
   h: Holding,
   flows: Schedule,
   horizonDay: number,
-  rateShiftPct: number,
-): { breakdown: Breakdown; modDurationAtHorizon: number } {
+  how: Sale,
+): { breakdown: Breakdown; modDurationAtHorizon: number | null } {
   const hv = hold_value(flows.days, flows.coupons, flows.principals, horizonDay, h.reinvestRate, h.exitYield);
   let sale = hv[4] as number;
-  let modDurationAtHorizon = 0;
-  if (sale > 0) {
-    const amounts: number[] = [];
-    const shifted: number[] = [];
-    flows.days.forEach((d, i) => {
-      if (d > horizonDay) {
-        amounts.push((flows.coupons[i] as number) + (flows.principals[i] as number));
-        shifted.push(d - horizonDay);
-      }
-    });
-    modDurationAtHorizon = modified_duration(amounts, shifted, h.exitYield);
-    if (rateShiftPct !== 0) sale = price_after_rate_shift(sale, modDurationAtHorizon, rateShiftPct);
+  let modDurationAtHorizon: number | null = null;
+  if ("shiftPct" in how) {
+    modDurationAtHorizon = 0;
+    if (sale > 0) {
+      const amounts: number[] = [];
+      const shifted: number[] = [];
+      flows.days.forEach((d, i) => {
+        if (d > horizonDay) {
+          amounts.push((flows.coupons[i] as number) + (flows.principals[i] as number));
+          shifted.push(d - horizonDay);
+        }
+      });
+      modDurationAtHorizon = modified_duration(amounts, shifted, h.exitYield);
+      if (how.shiftPct !== 0) sale = price_after_rate_shift(sale, modDurationAtHorizon, how.shiftPct);
+    }
+  } else if (sale > 0) {
+    sale = value_along_path(flows.days, amountsOf(flows), horizonDay, h.periodDays, how.pathPct);
   }
   const { qty } = h;
   const invested = qty * h.dirtyPrice;
@@ -118,6 +133,31 @@ function breakdownOf(
   };
 }
 
+/*
+  A floater's flows when the key rate moves by shiftPct in equal steps on
+  each of the first `steps` coupons, and the per-period rates to discount
+  them at: today's rate for the issue moved by the same change of the key
+  rate, so the spread the market asks over the key rate stays.
+*/
+function floaterPath(issue: Issue, market: Market, d: Derived, shiftPct: number, steps: number): { flows: Schedule; discount: number[] } {
+  const key = Array.from(floater_rate_path(market.keyRatePct, shiftPct, steps, d.couponDays.length));
+  const flows = scheduleFromTriples(
+    build_cash_flow(
+      issue.nominal,
+      issue.periodDays,
+      d.couponDays,
+      key.map((k) => k + issue.spreadPct),
+      d.amortDays,
+      d.amortFracs,
+      0,
+      OFFER_NONE,
+      0,
+    ),
+  );
+  const today = periodic_rate_pct(d.ytmMaturity, issue.periodDays);
+  return { flows, discount: key.map((k) => today + (k - market.keyRatePct)) };
+}
+
 /* Bonds bought, or the first plan error in the documented order */
 function checkPlan(d: Derived, plan: Plan): number | ErrorCode {
   if (!Number.isFinite(plan.amount) || plan.amount <= 0) return "amount_not_positive";
@@ -143,41 +183,41 @@ export function calculate(issue: Issue, market: Market, plan: Plan): Result<Calc
   const h: Holding = {
     qty,
     dirtyPrice: d.dirtyPrice,
+    periodDays: issue.periodDays,
     reinvestRate: plan.reinvest ? y : 0,
     exitYield: y,
     plan,
   };
 
-  const base = breakdownOf(h, d.flows, plan.horizonDay, 0).breakdown;
+  const base = breakdownOf(h, d.flows, plan.horizonDay, { shiftPct: 0 }).breakdown;
   const applicable = plan.horizonDay < d.maturityDay;
-  const early = breakdownOf(h, d.flows, plan.horizonDay, applicable ? plan.rateShiftPct : 0);
+  const shift = applicable ? plan.rateShiftPct : 0;
+  let early: ReturnType<typeof breakdownOf>;
+  if (issue.couponType === "floater" && shift === 0) {
+    // An unchanged key rate is the plan itself.
+    early = { breakdown: base, modDurationAtHorizon: null };
+  } else if (issue.couponType === "floater") {
+    const paid = d.couponDays.filter((day) => day <= plan.horizonDay).length;
+    const { flows, discount } = floaterPath(issue, market, d, shift, paid + 1);
+    early = breakdownOf(h, flows, plan.horizonDay, { pathPct: discount });
+  } else {
+    early = breakdownOf(h, d.flows, plan.horizonDay, { shiftPct: shift });
+  }
 
   let floater: Calculation["floater"] = null;
   if (issue.couponType === "floater") {
     const scenarios = FLOATER_SHIFTS_PCT.map((shiftPct): FloaterScenario => {
-      const path = floater_rate_path(market.keyRatePct, shiftPct, FLOATER_RAMP_STEPS, d.couponDays.length);
-      const rates = Array.from(path, (r) => r + issue.spreadPct);
-      const flows = scheduleFromTriples(
-        build_cash_flow(
-          issue.nominal,
-          issue.periodDays,
-          d.couponDays,
-          rates,
-          d.amortDays,
-          d.amortFracs,
-          0,
-          OFFER_NONE,
-          0,
-        ),
-      );
-      return { shiftPct, breakdown: breakdownOf(h, flows, plan.horizonDay, 0).breakdown, coupons: flows.coupons };
+      const { flows, discount } = floaterPath(issue, market, d, shiftPct, FLOATER_RAMP_STEPS);
+      // An unchanged key rate is the plan itself.
+      const how: Sale = shiftPct === 0 ? { shiftPct: 0 } : { pathPct: discount };
+      return { shiftPct, breakdown: breakdownOf(h, flows, plan.horizonDay, how).breakdown, coupons: flows.coupons };
     });
     floater = { days: [...d.couponDays], scenarios };
   }
 
   let offer: Calculation["offer"] = null;
   if (d.offerDay !== null && d.flowsToOffer !== null) {
-    const before = breakdownOf(h, d.flowsToOffer, d.offerDay, 0).breakdown;
+    const before = breakdownOf(h, d.flowsToOffer, d.offerDay, { shiftPct: 0 }).breakdown;
     const worst = scheduleFromTriples(
       build_cash_flow(
         issue.nominal,
@@ -191,7 +231,7 @@ export function calculate(issue: Issue, market: Market, plan: Plan): Result<Calc
         WORST_CASE_COUPON_PCT,
       ),
     );
-    offer = { before, after: breakdownOf(h, worst, d.maturityDay, 0).breakdown };
+    offer = { before, after: breakdownOf(h, worst, d.maturityDay, { shiftPct: 0 }).breakdown };
   }
 
   return {

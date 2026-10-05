@@ -29,6 +29,7 @@ const ARRAY_ARGS = {
   build_cash_flow: [2, 3, 4, 5],
   floater_coupons: [2],
   hold_value: [0, 1, 2],
+  value_along_path: [0, 1, 4],
 };
 
 function call(impl, fn, args) {

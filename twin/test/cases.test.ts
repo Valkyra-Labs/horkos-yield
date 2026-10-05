@@ -48,6 +48,10 @@ function run(fn: string, args: unknown[]): unknown {
       return twin.hold_value(a(x[0]), a(x[1]), a(x[2]), n(x[3]), n(x[4]), n(x[5]));
     case "price_after_rate_shift":
       return twin.price_after_rate_shift(n(x[0]), n(x[1]), n(x[2]));
+    case "periodic_rate_pct":
+      return twin.periodic_rate_pct(n(x[0]), n(x[1]));
+    case "value_along_path":
+      return twin.value_along_path(a(x[0]), a(x[1]), n(x[2]), n(x[3]), a(x[4]));
     case "derive_bond":
       return twin.derive_bond(x[0] as Issue, x[1] as Market);
     case "calculate":
@@ -59,7 +63,7 @@ function run(fn: string, args: unknown[]): unknown {
 
 describe("TypeScript twin against cases.json", () => {
   it("covers every function", () => {
-    expect(new Set(cases.map((c) => c.fn)).size).toBe(14);
+    expect(new Set(cases.map((c) => c.fn)).size).toBe(16);
   });
 
   it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
