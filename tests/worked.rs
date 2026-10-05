@@ -191,3 +191,52 @@ fn no_annual_return_under_a_month() {
     );
     assert_eq!(MIN_ANNUALISED_DAYS, 30.0);
 }
+
+// Annual 10 percent coupons, bought above par between coupons: valuation
+// 2026-01-01, maturity 2027-07-02 (day 547), so the coupons fall on day 182
+// (2026-07-02) and day 547 (2027-07-02). 183 days of the 365-day period
+// have passed: accrued interest 100 x 183 / 365 = 50.136986. Clean price
+// 1,050, dirty 1,100.136986.
+fn above_par() -> Issue {
+    Issue {
+        nominal: 1000.0,
+        price_pct: 105.0,
+        accrued: None,
+        coupon_type: CouponType::Fixed,
+        coupon_rate_pct: 10.0,
+        spread_pct: 0.0,
+        period_days: 365.0,
+        maturity: "2027-07-02".into(),
+        offers: vec![],
+        amortization: vec![],
+    }
+}
+
+#[test]
+fn tax_nets_accrued_interest_and_the_loss_against_coupons() {
+    let plan = Plan {
+        amount: 11_100.0,
+        horizon_day: 547.0,
+        reinvest: false,
+        tax_regime: TaxRegime::Standard,
+        tax_rate_pct: 13.0,
+        rate_shift_pct: 0.0,
+    };
+    let b = calculate(&above_par(), &market("2026-01-01"), &plan)
+        .unwrap()
+        .plan;
+    // Ten bonds: invested 11,001.369863, of which accrued interest
+    // 501.369863; commission on the purchase 0.05 percent, 5.500685.
+    // 2026: the first coupon, 1,000, less the accrued interest paid for it,
+    // 501.369863: 498.630137 taxable.
+    // 2027: the second coupon, 1,000, and the redemption: 10,000 received
+    // against a cost of 11,001.369863 - 501.369863 (already deducted from
+    // the coupon) + 5.500685 commission = 10,505.500685, a loss of
+    // 505.500685, so 1,000 - 505.500685 = 494.499315 taxable.
+    // Tax 13 percent of 498.630137 + 494.499315 = 129.106829 (it was 13
+    // percent of both coupons, 260). Total 2,000 + 10,000 - 129.106829 -
+    // 5.500685 = 11,865.392486.
+    assert_close!(b.invested, 11_001.369_863_013_699);
+    assert_close!(b.tax, -129.106_828_767_123_3);
+    assert_close!(b.total, 11_865.392_486_301_369);
+}

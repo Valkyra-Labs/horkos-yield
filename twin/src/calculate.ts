@@ -4,13 +4,11 @@
   out.
 */
 
+import { civilFromDays, parseIsoDate } from "./dates.js";
 import { amountsOf, derive_bond, isCouponType, scheduleFromTriples } from "./issue.js";
 import {
   OFFER_NONE,
   OFFER_RATE_CHANGE,
-  TAX_IIS_B,
-  TAX_LDV,
-  TAX_STANDARD,
   YEAR,
   build_cash_flow,
   floater_rate_path,
@@ -18,7 +16,6 @@ import {
   modified_duration,
   periodic_rate_pct,
   price_after_rate_shift,
-  tax_amount,
   value_along_path,
 } from "./primitives.js";
 import type {
@@ -43,12 +40,6 @@ export const MAX_AMOUNT = 1e9;
 /* The shortest horizon, in days, whose return is annualised */
 export const MIN_ANNUALISED_DAYS = 30;
 
-const TAX_MODES: Record<TaxRegime, number> = {
-  standard: TAX_STANDARD,
-  ldv: TAX_LDV,
-  iis_b: TAX_IIS_B,
-};
-
 function isTaxRegime(code: unknown): code is TaxRegime {
   return code === "standard" || code === "ldv" || code === "iis_b";
 }
@@ -67,6 +58,11 @@ export function effective_annual_pct(invested: number, total: number, horizonDay
 type Holding = {
   qty: number;
   dirtyPrice: number;
+  /* Accrued interest paid per bond at purchase */
+  accruedPaid: number;
+  nominal: number;
+  /* The valuation date as days since 1970-01-01 */
+  today: number;
   periodDays: number;
   reinvestRate: number;
   exitYield: number;
@@ -112,9 +108,9 @@ function breakdownOf(
   const reinvest = (hv[1] as number) * qty;
   const amort = (hv[2] as number) * qty;
   const body = ((hv[3] as number) + sale) * qty;
-  const commission = ((invested + (sale > 0 ? sale * qty : 0)) * COMMISSION_PCT) / 100;
-  const gain = amort + body - invested;
-  const tax = tax_amount(coupons + reinvest, gain, h.plan.taxRatePct, TAX_MODES[h.plan.taxRegime], horizonDay);
+  const sold = sale > 0 ? sale * qty : 0;
+  const commission = ((invested + sold) * COMMISSION_PCT) / 100;
+  const tax = taxOf(h, flows, horizonDay, reinvest, invested, sold);
   const total = coupons + reinvest + amort + body - tax - commission;
   return {
     breakdown: {
@@ -134,6 +130,64 @@ function breakdownOf(
     },
     modDurationAtHorizon,
   };
+}
+
+/* One calendar year of the tax base */
+type TaxYear = { year: number; income: number; result: number; relieved: number };
+
+/*
+  Personal income tax summed over the calendar years the position pays in.
+  Each year's coupons and the result of redemptions and the sale form one
+  base, taxed at zero when negative and not carried to another year.
+  Accrued interest paid at purchase reduces the first coupon received (up
+  to that coupon) and the cost; the cost with the purchase commission is
+  spread over redemptions and the sale by the nominal each returns; the
+  sale bears its own commission; reinvestment income falls in the
+  horizon's year.
+*/
+function taxOf(h: Holding, flows: Schedule, horizonDay: number, reinvest: number, invested: number, sold: number): number {
+  if (h.plan.taxRegime === "iis_b") return 0;
+  const { qty } = h;
+  const yearOf = (day: number) => civilFromDays(h.today + Math.floor(day))[0];
+  const relief = h.plan.taxRegime === "ldv" && horizonDay >= 3 * YEAR;
+  const years: TaxYear[] = [];
+  const entry = (year: number): TaxYear => {
+    let t = years.find((x) => x.year === year);
+    if (!t) {
+      t = { year, income: 0, result: 0, relieved: 0 };
+      years.push(t);
+    }
+    return t;
+  };
+  const book = (t: TaxYear, result: number) => {
+    if (relief) t.relieved += result;
+    else t.result += result;
+  };
+  const firstDay = flows.days[0];
+  const firstCoupon = firstDay !== undefined && firstDay <= horizonDay ? (flows.coupons[0] as number) * qty : 0;
+  const deducted = Math.min(h.accruedPaid * qty, firstCoupon);
+  const cost = invested + (invested * COMMISSION_PCT) / 100 - deducted;
+  let repaid = 0;
+  for (let i = 0; i < flows.days.length; i++) {
+    const d = flows.days[i] as number;
+    if (d > horizonDay) break;
+    const t = entry(yearOf(d));
+    t.income += (flows.coupons[i] as number) * qty - (i === 0 ? deducted : 0);
+    const p = flows.principals[i] as number;
+    if (p > 0) {
+      book(t, p * qty - (cost * p) / h.nominal);
+      repaid += p;
+    }
+  }
+  const t = entry(yearOf(horizonDay));
+  if (sold > 0) book(t, sold - (sold * COMMISSION_PCT) / 100 - cost * ((h.nominal - repaid) / h.nominal));
+  t.income += reinvest;
+  let tax = 0;
+  for (const y of years) {
+    const base = y.income + y.result + y.relieved - Math.max(y.relieved, 0);
+    tax += (Math.max(base, 0) * h.plan.taxRatePct) / 100;
+  }
+  return tax;
 }
 
 /*
@@ -186,6 +240,9 @@ export function calculate(issue: Issue, market: Market, plan: Plan): Result<Calc
   const h: Holding = {
     qty,
     dirtyPrice: d.dirtyPrice,
+    accruedPaid: issue.accrued ?? d.accrued,
+    nominal: issue.nominal,
+    today: parseIsoDate(market.valuationDate) as number,
     periodDays: issue.periodDays,
     reinvestRate: plan.reinvest ? y : 0,
     exitYield: y,

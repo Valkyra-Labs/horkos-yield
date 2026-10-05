@@ -127,3 +127,37 @@ describe("short horizons", () => {
     expect(MIN_ANNUALISED_DAYS).toBe(30);
   });
 });
+
+// Annual 10 percent coupons, bought above par between coupons: valuation
+// 2026-01-01, coupons on day 182 (2026-07-02) and day 547 (2027-07-02);
+// accrued interest 100 x 183 / 365 = 50.136986; clean 1,050, dirty
+// 1,100.136986.
+const abovePar: Issue = {
+  nominal: 1000,
+  pricePct: 105,
+  accrued: null,
+  couponType: "fixed",
+  couponRatePct: 10,
+  spreadPct: 0,
+  periodDays: 365,
+  maturity: "2027-07-02",
+  offers: [],
+  amortization: [],
+};
+
+describe("tax", () => {
+  it("nets the accrued interest paid and the loss against coupons", () => {
+    const plan: Plan = { amount: 11_100, horizonDay: 547, reinvest: false, taxRegime: "standard", taxRatePct: 13, rateShiftPct: 0 };
+    const b = ok(calculate(abovePar, market("2026-01-01"), plan)).plan;
+    // Ten bonds: invested 11,001.369863, accrued interest 501.369863,
+    // purchase commission 5.500685.
+    // 2026: coupon 1,000 less the accrued interest paid: 498.630137.
+    // 2027: coupon 1,000; redemption 10,000 against a cost of 11,001.369863
+    // - 501.369863 + 5.500685 = 10,505.500685, a loss of 505.500685:
+    // 494.499315. Tax 13 percent of both: 129.106829. Total 2,000 + 10,000
+    // - 129.106829 - 5.500685 = 11,865.392486.
+    close(b.invested, 11_001.369_863_013_699);
+    close(b.tax, -129.106_828_767_123_3);
+    close(b.total, 11_865.392_486_301_369);
+  });
+});

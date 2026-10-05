@@ -1,11 +1,12 @@
 //! A plan for one issue: what the holder has at the horizon, the early exit
 //! under a key-rate shift, floater scenarios and the offer pair.
 
+use crate::date::{civil_from_days, parse_iso_date};
 use crate::issue::{derive_bond, CouponType, Derived, Error, Issue, Market, Schedule};
 use crate::primitives::{
-    build_cash_flow, floater_rate_path, hold_value, modified_duration, periodic_rate_pct,
-    price_after_rate_shift, tax_amount, value_along_path, OFFER_NONE, OFFER_RATE_CHANGE, TAX_IIS_B,
-    TAX_LDV, TAX_STANDARD, YEAR,
+    build_cash_flow, floater_rate_path, hold_value, max_nan, min_nan, modified_duration,
+    periodic_rate_pct, price_after_rate_shift, value_along_path, OFFER_NONE, OFFER_RATE_CHANGE,
+    YEAR,
 };
 
 /// Brokerage commission in percent, charged on the purchase and on a sale
@@ -55,14 +56,6 @@ impl TaxRegime {
             "ldv" => Some(TaxRegime::Ldv),
             "iis_b" => Some(TaxRegime::IisB),
             _ => None,
-        }
-    }
-
-    fn mode(self) -> u32 {
-        match self {
-            TaxRegime::Standard => TAX_STANDARD,
-            TaxRegime::Ldv => TAX_LDV,
-            TaxRegime::IisB => TAX_IIS_B,
         }
     }
 }
@@ -183,6 +176,11 @@ pub fn effective_annual_pct(invested: f64, total: f64, horizon_day: f64) -> f64 
 struct Hold<'a> {
     qty: f64,
     dirty_price: f64,
+    /// Accrued interest paid per bond at purchase.
+    accrued_paid: f64,
+    nominal: f64,
+    /// The valuation date as days since 1970-01-01.
+    today: i64,
     period_days: f64,
     reinvest_rate: f64,
     exit_yield: f64,
@@ -249,14 +247,7 @@ impl Hold<'_> {
         let body = (hv[3] + sale) * qty;
         let sold = if sale > 0.0 { sale * qty } else { 0.0 };
         let commission = (invested + sold) * COMMISSION_PCT / 100.0;
-        let gain = amort + body - invested;
-        let tax = tax_amount(
-            coupons + reinvest,
-            gain,
-            self.plan.tax_rate_pct,
-            self.plan.tax_regime.mode(),
-            horizon_day,
-        );
+        let tax = self.tax(flows, horizon_day, reinvest, invested, sold);
         let total = coupons + reinvest + amort + body - tax - commission;
         let breakdown = Breakdown {
             qty,
@@ -279,6 +270,105 @@ impl Hold<'_> {
         };
         (breakdown, mod_duration_at_horizon)
     }
+
+    /// Personal income tax on the position, summed over the calendar years
+    /// it is paid in. In each year coupons and the result of redemptions and
+    /// the sale form one base, so a loss reduces that year's tax on coupons;
+    /// a year's base that is negative is taxed at zero and is not carried
+    /// to another year (that takes a tax declaration).
+    ///
+    /// - Accrued interest paid at purchase reduces the first coupon
+    ///   received, up to that coupon, and the cost by the same amount; with
+    ///   no coupon by the horizon it stays in the cost.
+    /// - The cost, with the purchase commission, is spread over the
+    ///   redemptions and the sale in proportion to the nominal each one
+    ///   returns; the sale also bears its own commission.
+    /// - Reinvestment income is taxed in the horizon's year.
+    fn tax(
+        &self,
+        flows: &Schedule,
+        horizon_day: f64,
+        reinvest: f64,
+        invested: f64,
+        sold: f64,
+    ) -> f64 {
+        if self.plan.tax_regime == TaxRegime::IisB {
+            return 0.0;
+        }
+        let qty = self.qty;
+        let year = |day: f64| civil_from_days(self.today + day.floor() as i64).0;
+        let relief = self.plan.tax_regime == TaxRegime::Ldv && horizon_day >= 3.0 * YEAR;
+        let mut years: Vec<TaxYear> = Vec::new();
+        let first_coupon = match flows.days.first() {
+            Some(&d) if d <= horizon_day => flows.coupons[0] * qty,
+            _ => 0.0,
+        };
+        let deducted = min_nan(self.accrued_paid * qty, first_coupon);
+        let cost = invested + invested * COMMISSION_PCT / 100.0 - deducted;
+        let mut repaid = 0.0;
+        for (i, &d) in flows.days.iter().enumerate() {
+            if d > horizon_day {
+                break;
+            }
+            let t = tax_year(&mut years, year(d));
+            t.income += flows.coupons[i] * qty - if i == 0 { deducted } else { 0.0 };
+            let p = flows.principals[i];
+            if p > 0.0 {
+                t.book(p * qty - cost * p / self.nominal, relief);
+                repaid += p;
+            }
+        }
+        let t = tax_year(&mut years, year(horizon_day));
+        if sold > 0.0 {
+            let left = (self.nominal - repaid) / self.nominal;
+            t.book(sold - sold * COMMISSION_PCT / 100.0 - cost * left, relief);
+        }
+        t.income += reinvest;
+        let mut tax = 0.0;
+        for t in &years {
+            let base = t.income + t.result + t.relieved - max_nan(t.relieved, 0.0);
+            tax += max_nan(base, 0.0) * self.plan.tax_rate_pct / 100.0;
+        }
+        tax
+    }
+}
+
+/// One calendar year of the tax base.
+#[derive(Default)]
+struct TaxYear {
+    year: i64,
+    /// Coupons and reinvestment income.
+    income: f64,
+    /// Result of redemptions and the sale.
+    result: f64,
+    /// The part of the result under the long-term holding relief.
+    relieved: f64,
+}
+
+impl TaxYear {
+    fn book(&mut self, result: f64, relief: bool) {
+        if relief {
+            self.relieved += result;
+        } else {
+            self.result += result;
+        }
+    }
+}
+
+/// The entry for a year, added at the end when it is new: flows come in
+/// day order, so the years stay in order.
+fn tax_year(years: &mut Vec<TaxYear>, year: i64) -> &mut TaxYear {
+    let i = match years.iter().position(|t| t.year == year) {
+        Some(i) => i,
+        None => {
+            years.push(TaxYear {
+                year,
+                ..TaxYear::default()
+            });
+            years.len() - 1
+        }
+    };
+    &mut years[i]
 }
 
 /// Checks a plan against an issue's derived values, in the order
@@ -365,9 +455,13 @@ pub fn calculate(issue: &Issue, market: &Market, plan: &Plan) -> Result<Calculat
     let d = derive_bond(issue, market)?;
     let qty = check_plan(&d, plan)?;
     let y = d.ytm_maturity;
+    let today = parse_iso_date(&market.valuation_date).ok_or(Error::InvalidDate)?;
     let hold = Hold {
         qty,
         dirty_price: d.dirty_price,
+        accrued_paid: issue.accrued.unwrap_or(d.accrued),
+        nominal: issue.nominal,
+        today,
         period_days: issue.period_days,
         reinvest_rate: if plan.reinvest { y } else { 0.0 },
         exit_yield: y,
