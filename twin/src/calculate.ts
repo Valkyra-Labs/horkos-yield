@@ -40,6 +40,8 @@ export const WORST_CASE_COUPON_PCT = 0.1;
 export const FLOATER_SHIFTS_PCT: readonly number[] = [-2, 0, 2];
 export const FLOATER_RAMP_STEPS = 4;
 export const MAX_AMOUNT = 1e9;
+/* The shortest horizon, in days, whose return is annualised */
+export const MIN_ANNUALISED_DAYS = 30;
 
 const TAX_MODES: Record<TaxRegime, number> = {
   standard: TAX_STANDARD,
@@ -126,7 +128,8 @@ function breakdownOf(
       commission: -commission,
       total,
       profit: total - invested,
-      annualPct: effective_annual_pct(invested, total, horizonDay),
+      periodPct: ((total - invested) / invested) * 100,
+      annualPct: horizonDay >= MIN_ANNUALISED_DAYS ? effective_annual_pct(invested, total, horizonDay) : null,
       horizonDay,
     },
     modDurationAtHorizon,

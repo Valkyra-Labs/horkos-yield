@@ -2,7 +2,7 @@
 // the arithmetic in the comments. The same examples run against the Rust
 // crate in tests/worked.rs.
 import { describe, expect, it } from "vitest";
-import { calculate, hold_value } from "../src/index.js";
+import { MIN_ANNUALISED_DAYS, calculate, effective_annual_pct, hold_value } from "../src/index.js";
 import type { Calculation, Issue, Market, Plan } from "../src/index.js";
 
 const close = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThanOrEqual(1e-9 * Math.max(Math.abs(want), 1));
@@ -110,6 +110,20 @@ describe("amortisation", () => {
     close(b.amort, 5_000);
     close(b.body, 5_000);
     close(b.total, 12_095);
-    close(b.annualPct, 9.977_270_378_928_749);
+    close(b.annualPct!, 9.977_270_378_928_749);
+  });
+});
+
+describe("short horizons", () => {
+  it("gives no annual return under a month", () => {
+    // The par floater for 29 and for 30 days: under 30 days only the return
+    // over the period.
+    const at = (horizonDay: number) => ok(calculate(floater, market("2026-01-01"), { ...floaterPlan(0), horizonDay })).plan;
+    const short = at(29);
+    expect(short.annualPct).toBeNull();
+    close(short.periodPct, (short.total / short.invested - 1) * 100);
+    const month = at(30);
+    expect(month.annualPct).toBe(effective_annual_pct(month.invested, month.total, 30));
+    expect(MIN_ANNUALISED_DAYS).toBe(30);
   });
 });

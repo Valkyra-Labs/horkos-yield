@@ -160,5 +160,34 @@ fn amortising_plan_earns_about_its_yield() {
     assert_close!(b.amort, 5_000.0);
     assert_close!(b.body, 5_000.0);
     assert_close!(b.total, 12_095.0);
-    assert_close!(b.annual_pct, 9.977_270_378_928_749);
+    assert_close!(b.annual_pct.unwrap(), 9.977_270_378_928_749);
+}
+
+#[test]
+fn no_annual_return_under_a_month() {
+    // The par floater above for 29 and for 30 days. Under 30 days the
+    // return is given over the period only; compounded to a year, the
+    // 0.1 percent of commission alone would read as about -1.2 percent a
+    // year at 30 days and -30 percent at one day.
+    let at = |horizon_day: f64| {
+        let plan = Plan {
+            horizon_day,
+            ..floater_plan(0.0)
+        };
+        calculate(&floater(), &market("2026-01-01"), &plan)
+            .unwrap()
+            .plan
+    };
+    let short = at(29.0);
+    assert_eq!(short.annual_pct, None);
+    assert_close!(
+        short.period_pct,
+        (short.total / short.invested - 1.0) * 100.0
+    );
+    let month = at(30.0);
+    assert_eq!(
+        month.annual_pct,
+        Some(effective_annual_pct(month.invested, month.total, 30.0))
+    );
+    assert_eq!(MIN_ANNUALISED_DAYS, 30.0);
 }

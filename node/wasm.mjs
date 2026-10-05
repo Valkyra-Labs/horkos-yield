@@ -63,7 +63,8 @@ export function wrap(w) {
       commission: b.commission,
       total: b.total,
       profit: b.profit,
-      annualPct: b.annualPct,
+      periodPct: b.periodPct,
+      annualPct: b.annualPct ?? null,
       horizonDay: b.horizonDay,
     };
     b.free();

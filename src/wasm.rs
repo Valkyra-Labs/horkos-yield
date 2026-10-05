@@ -362,8 +362,10 @@ pub struct JsBreakdown {
     pub commission: f64,
     pub total: f64,
     pub profit: f64,
+    #[wasm_bindgen(js_name = periodPct)]
+    pub period_pct: f64,
     #[wasm_bindgen(js_name = annualPct)]
-    pub annual_pct: f64,
+    pub annual_pct: Option<f64>,
     #[wasm_bindgen(js_name = horizonDay)]
     pub horizon_day: f64,
 }
@@ -381,6 +383,7 @@ impl From<Breakdown> for JsBreakdown {
             commission: b.commission,
             total: b.total,
             profit: b.profit,
+            period_pct: b.period_pct,
             annual_pct: b.annual_pct,
             horizon_day: b.horizon_day,
         }

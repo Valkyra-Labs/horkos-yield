@@ -11,6 +11,7 @@ export {
   FLOATER_RAMP_STEPS,
   FLOATER_SHIFTS_PCT,
   MAX_AMOUNT,
+  MIN_ANNUALISED_DAYS,
   WORST_CASE_COUPON_PCT,
   calculate,
   effective_annual_pct,

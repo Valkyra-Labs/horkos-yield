@@ -19,6 +19,13 @@ pub const FLOATER_SHIFTS_PCT: [f64; 3] = [-2.0, 0.0, 2.0];
 pub const FLOATER_RAMP_STEPS: u32 = 4;
 /// The largest amount a plan accepts.
 pub const MAX_AMOUNT: f64 = 1e9;
+/// The shortest horizon, in days, whose return is annualised. Compounding
+/// a shorter period's return to a year turns small amounts, such as the
+/// commission, into large annual rates (one day of commission alone reads
+/// as about -30 percent a year), so under a month the return is given for
+/// the period only. Thirty days is the shortest coupon period in common
+/// use (monthly coupons).
+pub const MIN_ANNUALISED_DAYS: f64 = 30.0;
 
 /// How income is taxed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,8 +108,11 @@ pub struct Breakdown {
     pub total: f64,
     /// `total - invested`.
     pub profit: f64,
-    /// Effective annual return in percent, see [`effective_annual_pct`].
-    pub annual_pct: f64,
+    /// Return over the holding period in percent, `profit / invested`.
+    pub period_pct: f64,
+    /// Effective annual return in percent, see [`effective_annual_pct`];
+    /// `None` for a horizon under [`MIN_ANNUALISED_DAYS`].
+    pub annual_pct: Option<f64>,
     pub horizon_day: f64,
 }
 
@@ -259,7 +269,12 @@ impl Hold<'_> {
             commission: -commission,
             total,
             profit: total - invested,
-            annual_pct: effective_annual_pct(invested, total, horizon_day),
+            period_pct: (total - invested) / invested * 100.0,
+            annual_pct: if horizon_day >= MIN_ANNUALISED_DAYS {
+                Some(effective_annual_pct(invested, total, horizon_day))
+            } else {
+                None
+            },
             horizon_day,
         };
         (breakdown, mod_duration_at_horizon)

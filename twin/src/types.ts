@@ -105,7 +105,10 @@ export type Breakdown = {
   commission: number;
   total: number;
   profit: number;
-  annualPct: number;
+  /* Return over the holding period, percent: profit / invested */
+  periodPct: number;
+  /* Effective annual return, percent; null under MIN_ANNUALISED_DAYS */
+  annualPct: number | null;
   horizonDay: number;
 };
 

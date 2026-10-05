@@ -143,7 +143,8 @@ fn breakdown(b: &Breakdown) -> Value {
         "commission": f(b.commission),
         "total": f(b.total),
         "profit": f(b.profit),
-        "annualPct": f(b.annual_pct),
+        "periodPct": f(b.period_pct),
+        "annualPct": opt(b.annual_pct),
         "horizonDay": f(b.horizon_day),
     })
 }
