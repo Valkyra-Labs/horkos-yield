@@ -23,7 +23,8 @@ WebAssembly, with a TypeScript twin in `twin/`: a second implementation
 of the same functions, written separately and checked against the Rust
 one on every case.
 
-Status: early. Both implementations pass the 97 cases in `cases.json`,
+Status: early. Both implementations pass the 109 cases in `cases.json`
+and the hand-computed worked examples,
 and the WebAssembly build agrees with the twin on those cases and on
 1,000 generated issues within 1e-6 relative. Sizes, timings and how the
 WebAssembly boundary was chosen: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
@@ -33,17 +34,23 @@ WebAssembly boundary was chosen: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 Primitives, on flat arrays of numbers:
 
 - price from an annual effective yield; yield to maturity, effective
-  (bisection on -99 to 1000 percent, 200 steps) and simple;
+  (bisection on -99 to 1000 percent, 200 steps), and the simple yield
+  over the full term (all payments less the price, over the price,
+  divided by the years to the last payment; not compounded, and well
+  below the yield for an amortising issue, whose principal comes back
+  early);
 - accrued interest; Macaulay and modified duration;
 - the cash-flow schedule with amortisation and an offer (redeemed at the
   offer, or a new coupon rate after it);
-- floater key-rate paths and coupons;
-- tax for the standard regime, long-term holding relief (LDV: the gain is
-  exempt after three years) and an individual investment account of type
-  B (no tax);
-- what a holder collects by a horizon (coupons, reinvestment income,
-  amortisation, final redemption, sale value), and the price after a
-  parallel rate shift.
+- floater key-rate paths and coupons; a yield as the rate compounded
+  once a coupon period, and the value of flows discounted along a path
+  of per-period rates;
+- personal income tax on a year's base: 13 percent up to 2.4 million
+  roubles of the year's investment income, 15 percent above, the
+  threshold shared with the holder's other investment income;
+- what a holder collects by a horizon (coupons, income from reinvesting
+  the coupons and the principal repaid early, amortisation, final
+  redemption, sale value), and the price after a parallel rate shift.
 
 For an issue:
 
@@ -52,12 +59,44 @@ For an issue:
   interest, the dirty price, yields to maturity and to the offer, the
   simple yield, and durations.
 - `calculate(issue, market, plan)`: for an amount, a horizon,
-  reinvestment on or off, a tax regime and a key-rate shift: the plan's
-  totals and effective annual return as a signed breakdown, the early
-  exit with the shift applied to the sale, three floater scenarios (key
-  rate -2, 0 and +2 points, reached over four coupon periods) and, for an
-  issue with an offer, holding to the offer against holding through it at
-  a 0.1 percent coupon.
+  reinvestment on or off, the account (ordinary or IIS type B), the
+  holder's other investment income and a key-rate change by the horizon:
+  the plan's totals, its return over the period and, for a horizon of 30
+  days or more, its effective annual return, as a signed breakdown; the
+  early exit under the key-rate change; three floater scenarios (key rate
+  -2, 0 and +2 points, reached over four coupon periods); and, for an
+  issue with an offer, holding to the offer against holding through it
+  at a 0.1 percent coupon.
+
+How `calculate` models the holding:
+
+- Coupons and principal repaid before the horizon are reinvested, when
+  the plan asks, at the yield to maturity.
+- A key-rate change moves a fixed coupon's sale price by its modified
+  duration. A floater's coupons follow the key rate, and its sale keeps
+  today's spread to the key rate (the flows are discounted along the
+  key-rate path at that spread), so its price stays close to where it
+  is; the early exit gives no duration for a floater.
+- Tax, in an ordinary account, is counted per calendar year: coupons and
+  the result of redemptions and the sale form one base, so a loss
+  reduces that year's tax on coupons; a negative year pays nothing and
+  is not carried to another year. The accrued interest paid at purchase
+  reduces the first coupon received and the cost by the same amount, or
+  stays in the cost when no coupon is received; commissions are costs.
+  A redemption or sale more than three years after the purchase,
+  counted by calendar anniversary, has its positive result exempt (the
+  long-term holding relief), up to 3 million roubles for each full year
+  held; coupons stay taxed. Rates as above. Reinvestment income is taxed
+  in the horizon's year.
+- IIS type B (only accounts opened by the end of 2023) is taken as no
+  tax: income in it is free of tax when it is closed after at least
+  three years.
+- The return is not annualised for a horizon under 30 days, where
+  compounding to a year turns small amounts such as the commission into
+  large annual rates.
+
+The tax rules follow the Tax Code of the Russian Federation, part two,
+articles 214.1, 219.1 and 224, as in force from 1 October 2026.
 
 Conventions: days are whole-day offsets from the valuation date, ACT/365;
 amounts are per bond in currency units unless the field is a total; rates
@@ -80,6 +119,7 @@ this order of checks:
 | `amount_not_positive` | amount is not a positive finite number |
 | `amount_too_large` | amount is above 1e9 |
 | `horizon_out_of_range` | horizon is not between day 1 and maturity |
+| `invalid_other_income` | other investment income is not a finite number of at least zero |
 | `invalid_price` | dirty price is not a positive finite number |
 | `amount_below_one_bond` | the amount does not buy one bond |
 
@@ -90,8 +130,12 @@ input.
 
 Limits: coupons fall at a fixed period in days, not on calendar months;
 amortisation pays only on a coupon day, and amortisation before the
-valuation date does not reduce the nominal; tax counts the horizon as the
-holding period; reinvestment and the sale both use the yield to maturity.
+valuation date does not reduce the nominal; the purchase settles on the
+valuation date and a sale on the horizon; tax is counted at the horizon
+rather than withheld coupon by coupon; carrying a loss to a later year
+(by declaration) is not modelled; reinvestment and the sale both use the
+yield to maturity, which for a floater assumes the key rate stays where
+it is.
 
 ## API
 
@@ -120,7 +164,7 @@ let plan = Plan {
     horizon_day: 365.0,
     reinvest: true,
     tax_regime: TaxRegime::Standard,
-    tax_rate_pct: 13.0,
+    other_income: 0.0,
     rate_shift_pct: 2.0,
 };
 let result = calculate(&issue, &market, &plan)?;
@@ -128,7 +172,8 @@ let result = calculate(&issue, &market, &plan)?;
 
 The primitives (`price_from_yield`, `ytm_effective`, `ytm_simple`,
 `accrued_interest`, `macaulay_duration`, `modified_duration`,
-`build_cash_flow`, `floater_rate_path`, `floater_coupons`, `tax_amount`,
+`build_cash_flow`, `floater_rate_path`, `floater_coupons`,
+`periodic_rate_pct`, `value_along_path`, `income_tax`,
 `hold_value`, `price_after_rate_shift`) and `effective_annual_pct` are
 re-exported at the crate root. Types are plain structs without serde.
 
@@ -197,13 +242,24 @@ pnpm test        # vitest against cases.json
 
 ## Parity
 
-- `cases.json` holds 97 cases: 36 for the primitives (six of them
-  edge cases), 25 for `derive_bond` and 36 for `calculate`
-  (amortisation, offers, floaters, each tax regime, moved valuation dates
-  and every error code). NaN is written `"NaN"`. The expected values for
-  `derive_bond` and `calculate` were computed by the TypeScript code these
-  functions were ported from, not by either implementation here; error
-  expectations are written by hand.
+- `cases.json` holds 109 cases: 42 for the primitives (six of them
+  edge cases), 25 for `derive_bond` and 42 for `calculate`
+  (amortisation, offers, floaters, both accounts, the 15 percent rate,
+  the long-term holding relief on either side of the third anniversary
+  and at its cap, moved valuation dates and every error code). NaN is
+  written `"NaN"`. The expected values for `derive_bond` were computed by
+  the TypeScript code these functions were ported from, not by either
+  implementation here. Those for `calculate` were computed the same way
+  until the tax, floater and reinvestment model changed; the cases it
+  changed were recomputed by the twin and the Rust crate agrees with
+  them. The new primitive cases and the error expectations are written by
+  hand.
+- `tests/worked.rs` and `twin/test/worked.test.ts` run the same worked
+  examples, each a small issue whose results are computed by hand with
+  the arithmetic in comments: a floater under a key-rate change, an
+  amortising plan, tax netting with the accrued interest paid, the
+  15 percent rate, the long-term holding relief and its cap, and the
+  shortest annualised horizon.
 - `tests/cases.rs` checks the Rust crate against the table;
   `twin/test/cases.test.ts` checks the twin.
 - `node/parity.test.mjs` loads the built package and the built twin and
