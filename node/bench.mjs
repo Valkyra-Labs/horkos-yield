@@ -24,7 +24,7 @@ const plans = issues.map((i) => ({
   horizonDay: Math.min(365, twin.dayOffset(MARKET.valuationDate, i.maturity)),
   reinvest: true,
   taxRegime: "standard",
-  taxRatePct: 13,
+  otherIncome: 0,
   rateShiftPct: 2,
 }));
 

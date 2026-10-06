@@ -12,9 +12,10 @@ export const OFFER_NONE = 0;
 export const OFFER_REDEEM = 1;
 export const OFFER_RATE_CHANGE = 2;
 
-export const TAX_STANDARD = 0;
-export const TAX_LDV = 1;
-export const TAX_IIS_B = 2;
+/* Income tax: 13 percent up to 2.4 million of a year's investment income, 15 above */
+export const TAX_RATE_PCT = 13;
+export const TAX_HIGHER_RATE_PCT = 15;
+export const TAX_THRESHOLD = 2_400_000;
 
 const at = (xs: Num, i: number): number => xs[i] as number;
 
@@ -39,6 +40,11 @@ export function ytm_effective(amounts: Num, days: Num, price: number): number {
   return 0.5 * (lo + hi);
 }
 
+/*
+  Simple yield over the full term: all flows less the price, over the price,
+  divided by the years to the last flow; not compounded, so below the yield
+  to maturity for an amortising issue.
+*/
 export function ytm_simple(amounts: Num, days: Num, price: number): number {
   if (amounts.length === 0 || !(price > 0)) return Number.NaN;
   let total = 0;
@@ -139,19 +145,23 @@ export function floater_coupons(
   return out;
 }
 
-export function tax_amount(
-  couponIncome: number,
-  capitalGain: number,
-  ratePct: number,
-  mode: number,
-  holdDays: number,
-): number {
-  if (mode === TAX_IIS_B) return 0;
-  const gainTaxable = mode === TAX_LDV && holdDays >= 3 * YEAR ? 0 : Math.max(capitalGain, 0);
-  return ((Math.max(couponIncome, 0) + gainTaxable) * ratePct) / 100;
+/*
+  Tax on one year's taxable base when the holder's other investment income
+  that year is otherIncome: 13 percent on the part that stays within the
+  threshold with the other income, 15 on the rest; nothing on a base that
+  is not positive.
+*/
+export function income_tax(base: number, otherIncome: number): number {
+  const b = Math.max(base, 0);
+  const low = Math.min(Math.max(TAX_THRESHOLD - otherIncome, 0), b);
+  return (low * TAX_RATE_PCT) / 100 + ((b - low) * TAX_HIGHER_RATE_PCT) / 100;
 }
 
-/* [coupons, reinvest income, amortisation, final principal, sale price] per bond */
+/*
+  [coupons, reinvest income, amortisation, final principal, sale price] per
+  bond; coupons and principal paid by the horizon are reinvested at
+  reinvestRate when it is positive.
+*/
 export function hold_value(
   days: Num,
   coupons: Num,
@@ -174,7 +184,7 @@ export function hold_value(
     if (d <= horizonDay) {
       couponsSum += c;
       if (reinvestRate > 0) {
-        reinvest += c * (Math.pow(1 + reinvestRate, (horizonDay - d) / YEAR) - 1);
+        reinvest += (c + p) * (Math.pow(1 + reinvestRate, (horizonDay - d) / YEAR) - 1);
       }
       if (Math.abs(d - last) < 0.5) fin += p;
       else amort += p;
@@ -183,6 +193,32 @@ export function hold_value(
     }
   }
   return Float64Array.from([couponsSum, reinvest, amort, fin, sale]);
+}
+
+/* The rate in percent compounded once a period that equals the annual effective yield y */
+export function periodic_rate_pct(y: number, periodDays: number): number {
+  return ((Math.pow(1 + y, periodDays / YEAR) - 1) * YEAR) / periodDays * 100;
+}
+
+/*
+  Value at horizonDay of the flows after it, discounted period by period at
+  ratesPct[i] (compounded once a period) over the period that ends on
+  days[i], the first one only for the part left after the horizon. A
+  missing rate is zero.
+*/
+export function value_along_path(days: Num, amounts: Num, horizonDay: number, periodDays: number, ratesPct: Num): number {
+  let factor = 1;
+  let from = horizonDay;
+  let pv = 0;
+  for (let i = 0; i < days.length; i++) {
+    const d = at(days, i);
+    if (d <= horizonDay) continue;
+    const rate = i < ratesPct.length ? at(ratesPct, i) : 0;
+    factor *= Math.pow(1 + ((rate / 100) * periodDays) / YEAR, -(d - from) / periodDays);
+    from = d;
+    pv += (i < amounts.length ? at(amounts, i) : 0) * factor;
+  }
+  return pv;
 }
 
 export function price_after_rate_shift(price: number, modDuration: number, deltaPct: number): number {

@@ -1,5 +1,5 @@
 //! Primitives on flat `f64` slices: pricing, yields, durations, cash-flow
-//! building, floater paths, tax and holding-period value.
+//! building, floater paths, income tax and holding-period value.
 //!
 //! Conventions:
 //! - Time is a day offset from the valuation date, ACT/365.
@@ -23,12 +23,17 @@ pub const OFFER_REDEEM: u32 = 1;
 /// rate.
 pub const OFFER_RATE_CHANGE: u32 = 2;
 
-/// `tax_amount` mode: coupons and positive capital gain are taxed.
-pub const TAX_STANDARD: u32 = 0;
-/// `tax_amount` mode: long-term holding relief (LDV).
-pub const TAX_LDV: u32 = 1;
-/// `tax_amount` mode: individual investment account of type B (IIS type B).
-pub const TAX_IIS_B: u32 = 2;
+/// Personal income tax rate on investment income up to [`TAX_THRESHOLD`]
+/// a year, percent.
+pub const TAX_RATE_PCT: f64 = 13.0;
+/// The rate above [`TAX_THRESHOLD`], percent.
+pub const TAX_HIGHER_RATE_PCT: f64 = 15.0;
+/// Investment income in a calendar year taxed at [`TAX_RATE_PCT`]; the
+/// rest of the year's investment income is taxed at
+/// [`TAX_HIGHER_RATE_PCT`]. The threshold is shared by all of a person's
+/// investment income: securities, dividends, deposit interest above the
+/// tax-free allowance, individual investment accounts.
+pub const TAX_THRESHOLD: f64 = 2_400_000.0;
 
 pub(crate) fn max_nan(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() {
@@ -81,9 +86,12 @@ pub fn ytm_effective(amounts: &[f64], days: &[f64], price: f64) -> f64 {
     0.5 * (lo + hi)
 }
 
-/// Simple (non-compounded) annualised yield: total gain over price scaled
-/// to a year by the day of the last flow. NaN when there are no flows, the
-/// price is not positive or the last flow is not in the future.
+/// Simple yield over the full term: all flows less the price, as a share
+/// of the price, divided by the years to the last flow. Not compounded,
+/// and it counts the money as invested until the last flow, so for an
+/// amortising issue, whose principal comes back earlier, it is well below
+/// the yield to maturity. NaN when there are no flows, the price is not
+/// positive or the last flow is not in the future.
 pub fn ytm_simple(amounts: &[f64], days: &[f64], price: f64) -> f64 {
     if amounts.is_empty() || price.is_nan() || price <= 0.0 {
         return f64::NAN;
@@ -211,42 +219,26 @@ pub fn floater_coupons(
         .collect()
 }
 
-/// Personal income tax on bond income.
-///
-/// - [`TAX_STANDARD`]: coupons and positive capital gain taxed at
-///   `rate_pct`.
-/// - [`TAX_LDV`]: the gain is exempt when the position is held for three
-///   years (1,095 days) or more; coupons are still taxed.
-/// - [`TAX_IIS_B`]: no tax at all.
-///
-/// Losses are not netted against coupons. An unknown mode taxes as
-/// [`TAX_STANDARD`].
-pub fn tax_amount(
-    coupon_income: f64,
-    capital_gain: f64,
-    rate_pct: f64,
-    mode: u32,
-    hold_days: f64,
-) -> f64 {
-    if mode == TAX_IIS_B {
-        return 0.0;
-    }
-    let gain_taxable = if mode == TAX_LDV && hold_days >= 3.0 * YEAR {
-        0.0
-    } else {
-        max_nan(capital_gain, 0.0)
-    };
-    (max_nan(coupon_income, 0.0) + gain_taxable) * rate_pct / 100.0
+/// Personal income tax on one calendar year's taxable `base` from this
+/// position, when the holder's other investment income that year is
+/// `other_income`: [`TAX_RATE_PCT`] on the part that, added to the other
+/// income, stays within [`TAX_THRESHOLD`], [`TAX_HIGHER_RATE_PCT`] on the
+/// rest. A base that is not positive pays nothing.
+pub fn income_tax(base: f64, other_income: f64) -> f64 {
+    let base = max_nan(base, 0.0);
+    let low = min_nan(max_nan(TAX_THRESHOLD - other_income, 0.0), base);
+    low * TAX_RATE_PCT / 100.0 + (base - low) * TAX_HIGHER_RATE_PCT / 100.0
 }
 
 /// What a holder collects by `horizon_day`, per one bond:
 /// `[coupons, reinvest_income, amortisation, final_principal, sale_price]`.
 ///
-/// Coupons paid on or before the horizon are collected and, when
-/// `reinvest_rate > 0`, reinvested at that annual effective rate until the
-/// horizon. Principal paid on the last flow day counts as final redemption,
-/// earlier principal as amortisation. Flows after the horizon are sold as a
-/// dirty price discounted to the horizon at `exit_yield`.
+/// Coupons and principal paid on or before the horizon are collected and,
+/// when `reinvest_rate > 0`, reinvested at that annual effective rate until
+/// the horizon; `reinvest_income` is what that reinvestment earns.
+/// Principal paid on the last flow day counts as final redemption, earlier
+/// principal as amortisation. Flows after the horizon are sold as a dirty
+/// price discounted to the horizon at `exit_yield`.
 pub fn hold_value(
     days: &[f64],
     coupons: &[f64],
@@ -267,7 +259,7 @@ pub fn hold_value(
         if d <= horizon_day {
             coupons_sum += c;
             if reinvest_rate > 0.0 {
-                reinvest += c * ((1.0 + reinvest_rate).powf((horizon_day - d) / YEAR) - 1.0);
+                reinvest += (c + p) * ((1.0 + reinvest_rate).powf((horizon_day - d) / YEAR) - 1.0);
             }
             if (d - last).abs() < 0.5 {
                 fin += p;
@@ -279,6 +271,44 @@ pub fn hold_value(
         }
     }
     [coupons_sum, reinvest, amort, fin, sale]
+}
+
+/// The rate in percent, compounded once every `period_days`, that equals
+/// the annual effective yield `y`: `((1 + y)^(period / 365) - 1) * 365 /
+/// period * 100`. A floater's coupon is quoted in this convention, so the
+/// difference between this rate and the key rate is the spread the market
+/// asks of the issue.
+pub fn periodic_rate_pct(y: f64, period_days: f64) -> f64 {
+    ((1.0 + y).powf(period_days / YEAR) - 1.0) * YEAR / period_days * 100.0
+}
+
+/// Value at `horizon_day` of the flows after it, discounted period by
+/// period: the flow on `days[i]` is discounted over its period at
+/// `rates_pct[i]`, compounded once every `period_days`, and the first
+/// period after the horizon only for the part of it that is left. With
+/// the same rate in every period this is the value at the annual effective
+/// yield that [`periodic_rate_pct`] converts from. `days` are the flow
+/// days, ascending and a period apart; a missing rate is zero.
+pub fn value_along_path(
+    days: &[f64],
+    amounts: &[f64],
+    horizon_day: f64,
+    period_days: f64,
+    rates_pct: &[f64],
+) -> f64 {
+    let mut factor = 1.0;
+    let mut from = horizon_day;
+    let mut pv = 0.0;
+    for (i, &d) in days.iter().enumerate() {
+        if d <= horizon_day {
+            continue;
+        }
+        let rate = rates_pct.get(i).copied().unwrap_or(0.0);
+        factor *= (1.0 + rate / 100.0 * period_days / YEAR).powf(-(d - from) / period_days);
+        from = d;
+        pv += amounts.get(i).copied().unwrap_or(0.0) * factor;
+    }
+    pv
 }
 
 /// First-order price change from a parallel shift of the rate curve:
@@ -307,7 +337,7 @@ mod tests {
         assert!(ytm_effective(&[100.0], &[365.0], f64::NAN).is_nan());
         assert!(ytm_simple(&[100.0], &[0.0], 90.0).is_nan());
         assert!(accrued_interest(10.0, f64::NAN, 182.0).is_nan());
-        assert!(tax_amount(f64::NAN, 0.0, 13.0, TAX_STANDARD, 10.0).is_nan());
+        assert!(income_tax(f64::NAN, 0.0).is_nan());
         assert!(price_after_rate_shift(f64::NAN, 2.0, 1.0).is_nan());
     }
 

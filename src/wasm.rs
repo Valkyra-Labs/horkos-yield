@@ -90,14 +90,8 @@ pub fn floater_coupons(
 }
 
 #[wasm_bindgen]
-pub fn tax_amount(
-    coupon_income: f64,
-    capital_gain: f64,
-    rate_pct: f64,
-    mode: u32,
-    hold_days: f64,
-) -> f64 {
-    p::tax_amount(coupon_income, capital_gain, rate_pct, mode, hold_days)
+pub fn income_tax(base: f64, other_income: f64) -> f64 {
+    p::income_tax(base, other_income)
 }
 
 #[wasm_bindgen]
@@ -118,6 +112,22 @@ pub fn hold_value(
         exit_yield,
     )
     .to_vec()
+}
+
+#[wasm_bindgen]
+pub fn periodic_rate_pct(y: f64, period_days: f64) -> f64 {
+    p::periodic_rate_pct(y, period_days)
+}
+
+#[wasm_bindgen]
+pub fn value_along_path(
+    days: &[f64],
+    amounts: &[f64],
+    horizon_day: f64,
+    period_days: f64,
+    rates_pct: &[f64],
+) -> f64 {
+    p::value_along_path(days, amounts, horizon_day, period_days, rates_pct)
 }
 
 #[wasm_bindgen]
@@ -187,8 +197,8 @@ pub struct JsPlan {
     pub reinvest: bool,
     #[wasm_bindgen(js_name = taxRegime)]
     pub tax_regime: String,
-    #[wasm_bindgen(js_name = taxRatePct)]
-    pub tax_rate_pct: f64,
+    #[wasm_bindgen(js_name = otherIncome)]
+    pub other_income: f64,
     #[wasm_bindgen(js_name = rateShiftPct)]
     pub rate_shift_pct: f64,
 }
@@ -237,7 +247,7 @@ fn plan_of(p: &JsPlan) -> Result<Plan, Error> {
         horizon_day: p.horizon_day,
         reinvest: p.reinvest,
         tax_regime: TaxRegime::from_code(&p.tax_regime).ok_or(Error::InvalidCode)?,
-        tax_rate_pct: p.tax_rate_pct,
+        other_income: p.other_income,
         rate_shift_pct: p.rate_shift_pct,
     })
 }
@@ -346,8 +356,10 @@ pub struct JsBreakdown {
     pub commission: f64,
     pub total: f64,
     pub profit: f64,
+    #[wasm_bindgen(js_name = periodPct)]
+    pub period_pct: f64,
     #[wasm_bindgen(js_name = annualPct)]
-    pub annual_pct: f64,
+    pub annual_pct: Option<f64>,
     #[wasm_bindgen(js_name = horizonDay)]
     pub horizon_day: f64,
 }
@@ -365,6 +377,7 @@ impl From<Breakdown> for JsBreakdown {
             commission: b.commission,
             total: b.total,
             profit: b.profit,
+            period_pct: b.period_pct,
             annual_pct: b.annual_pct,
             horizon_day: b.horizon_day,
         }
@@ -380,7 +393,7 @@ pub struct JsEarlyExit {
     pub result: JsBreakdown,
     pub diff: f64,
     #[wasm_bindgen(js_name = modDurationAtHorizon)]
-    pub mod_duration_at_horizon: f64,
+    pub mod_duration_at_horizon: Option<f64>,
 }
 
 #[wasm_bindgen(js_name = FloaterScenario, getter_with_clone)]

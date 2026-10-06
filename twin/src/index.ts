@@ -10,10 +10,13 @@ export {
   COMMISSION_PCT,
   FLOATER_RAMP_STEPS,
   FLOATER_SHIFTS_PCT,
+  LDV_CAP_PER_YEAR,
+  LDV_YEARS,
   MAX_AMOUNT,
+  MIN_ANNUALISED_DAYS,
   WORST_CASE_COUPON_PCT,
   calculate,
   effective_annual_pct,
 } from "./calculate.js";
-export { dayOffset, parseIsoDate } from "./dates.js";
+export { addYears, civilFromDays, dayOffset, fullYears, parseIsoDate } from "./dates.js";
 export type * from "./types.js";

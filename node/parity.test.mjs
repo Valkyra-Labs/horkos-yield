@@ -29,6 +29,7 @@ const ARRAY_ARGS = {
   build_cash_flow: [2, 3, 4, 5],
   floater_coupons: [2],
   hold_value: [0, 1, 2],
+  value_along_path: [0, 1, 4],
 };
 
 function call(impl, fn, args) {
@@ -119,8 +120,8 @@ export function generate(count, seed) {
       amount: chance(0.02) ? pick([0, -5, Number.NaN, 2e9, 50]) : Math.round(Math.exp(uniform(Math.log(1000), Math.log(5e6)))),
       horizonDay: chance(0.03) ? pick([0, 0.5, maturityDay + 1, Number.NaN]) : int(1, Math.max(1, maturityDay)),
       reinvest: chance(0.5),
-      taxRegime: chance(0.005) ? "flat" : pick(["standard", "ldv", "iis_b"]),
-      taxRatePct: pick([13, 15]),
+      taxRegime: chance(0.005) ? "flat" : pick(["standard", "standard", "iis_b"]),
+      otherIncome: chance(0.01) ? pick([-1, Number.NaN]) : chance(0.6) ? 0 : pick([100_000, 2_000_000, 2_399_000, 5_000_000]),
       rateShiftPct: chance(0.3) ? 0 : round(uniform(-3, 3), 2),
     };
     out.push({ issue, market, plan });

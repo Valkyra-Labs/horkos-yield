@@ -97,7 +97,7 @@ fn plan(v: &Value) -> Result<Plan, Error> {
         horizon_day: num(&v["horizonDay"]),
         reinvest: v["reinvest"].as_bool().expect("reinvest"),
         tax_regime,
-        tax_rate_pct: num(&v["taxRatePct"]),
+        other_income: num(&v["otherIncome"]),
         rate_shift_pct: num(&v["rateShiftPct"]),
     })
 }
@@ -143,7 +143,8 @@ fn breakdown(b: &Breakdown) -> Value {
         "commission": f(b.commission),
         "total": f(b.total),
         "profit": f(b.profit),
-        "annualPct": f(b.annual_pct),
+        "periodPct": f(b.period_pct),
+        "annualPct": opt(b.annual_pct),
         "horizonDay": f(b.horizon_day),
     })
 }
@@ -156,7 +157,7 @@ fn calculation(c: &Calculation) -> Value {
             "applicable": c.early_exit.applicable,
             "result": breakdown(&c.early_exit.result),
             "diff": f(c.early_exit.diff),
-            "modDurationAtHorizon": f(c.early_exit.mod_duration_at_horizon),
+            "modDurationAtHorizon": opt(c.early_exit.mod_duration_at_horizon),
         },
         "floater": c.floater.as_ref().map_or(Value::Null, |fl| json!({
             "days": fs(&fl.days),
@@ -213,13 +214,7 @@ fn run(name: &str, a: &[Value]) -> Value {
             &arr(&a[2]),
             num(&a[3]),
         )),
-        "tax_amount" => f(tax_amount(
-            num(&a[0]),
-            num(&a[1]),
-            num(&a[2]),
-            u32_arg(&a[3]),
-            num(&a[4]),
-        )),
+        "income_tax" => f(income_tax(num(&a[0]), num(&a[1]))),
         "hold_value" => fs(&hold_value(
             &arr(&a[0]),
             &arr(&a[1]),
@@ -229,6 +224,14 @@ fn run(name: &str, a: &[Value]) -> Value {
             num(&a[5]),
         )),
         "price_after_rate_shift" => f(price_after_rate_shift(num(&a[0]), num(&a[1]), num(&a[2]))),
+        "periodic_rate_pct" => f(periodic_rate_pct(num(&a[0]), num(&a[1]))),
+        "value_along_path" => f(value_along_path(
+            &arr(&a[0]),
+            &arr(&a[1]),
+            num(&a[2]),
+            num(&a[3]),
+            &arr(&a[4]),
+        )),
         "derive_bond" => outcome(
             issue(&a[0]).and_then(|i| derive_bond(&i, &market(&a[1]))),
             derived,
@@ -328,7 +331,7 @@ fn every_case_matches() {
     );
     // Every function has cases; the table keeps the 30 original primitive
     // cases at its head.
-    assert_eq!(seen.len(), 14, "{seen:?}");
+    assert_eq!(seen.len(), 16, "{seen:?}");
     assert!(cases.len() >= 30 + seen["derive_bond"] + seen["calculate"]);
 }
 

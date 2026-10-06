@@ -30,6 +30,44 @@ export function parseIsoDate(s: string): number | null {
   return 365 * yy + leapDays + fromMarch - 719_468;
 }
 
+/* The calendar date [year, month, day] of a count of days since 1970-01-01 */
+export function civilFromDays(days: number): [number, number, number] {
+  const z = days + 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365);
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const d = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const m = mp < 10 ? mp + 3 : mp - 9;
+  return [yoe + era * 400 + (m <= 2 ? 1 : 0), m, d];
+}
+
+/* Days since 1970-01-01 of a calendar date (any month and day in range) */
+function daysFromCivil(y: number, m: number, d: number): number {
+  const yy = m <= 2 ? y - 1 : y;
+  const mm = m <= 2 ? m + 9 : m - 3;
+  const leapDays = Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400);
+  return 365 * yy + leapDays + Math.floor((153 * mm + 2) / 5) + d - 1 - 719_468;
+}
+
+/*
+  The date `years` calendar years after `days`: the same month and day, and
+  28 February for 29 February in a year that has none (Tax Code art. 6.1)
+*/
+export function addYears(days: number, years: number): number {
+  const [y, m, d] = civilFromDays(days);
+  const year = y + years;
+  return daysFromCivil(year, m, m === 2 && d === 29 && !isLeap(year) ? 28 : d);
+}
+
+/* Whole calendar years from one day to another: anniversaries on or before `to` */
+export function fullYears(from: number, to: number): number {
+  let n = civilFromDays(to)[0] - civilFromDays(from)[0];
+  if (n > 0 && addYears(from, n) > to) n -= 1;
+  return Math.max(n, 0);
+}
+
 /* Whole days from one YYYY-MM-DD date to another, null when either is invalid */
 export function dayOffset(from: string, to: string): number | null {
   const a = parseIsoDate(from);

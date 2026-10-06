@@ -42,7 +42,7 @@
 //!     horizon_day: 365.0,
 //!     reinvest: true,
 //!     tax_regime: TaxRegime::Standard,
-//!     tax_rate_pct: 13.0,
+//!     other_income: 0.0,
 //!     rate_shift_pct: 2.0,
 //! };
 //! let b = calculate(&issue, &market, &plan).unwrap().plan;
@@ -60,7 +60,8 @@ mod wasm;
 pub use calculate::{
     calculate, effective_annual_pct, Breakdown, Calculation, EarlyExit, FloaterScenario,
     FloaterScenarios, OfferPair, Plan, TaxRegime, COMMISSION_PCT, FLOATER_RAMP_STEPS,
-    FLOATER_SHIFTS_PCT, MAX_AMOUNT, WORST_CASE_COUPON_PCT,
+    FLOATER_SHIFTS_PCT, LDV_CAP_PER_YEAR, LDV_YEARS, MAX_AMOUNT, MIN_ANNUALISED_DAYS,
+    WORST_CASE_COUPON_PCT,
 };
 pub use issue::{
     coupon_schedule, derive_bond, Amortization, CouponType, Derived, Error, Event, Issue, Market,

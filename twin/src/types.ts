@@ -14,6 +14,7 @@ export type ErrorCode =
   | "amount_not_positive"
   | "amount_too_large"
   | "horizon_out_of_range"
+  | "invalid_other_income"
   | "invalid_price"
   | "amount_below_one_bond";
 
@@ -21,7 +22,12 @@ export type ErrorCode =
 export type Result<T> = { ok: T } | { error: ErrorCode };
 
 export type CouponType = "fixed" | "floater";
-export type TaxRegime = "standard" | "ldv" | "iis_b";
+/*
+  standard: an ordinary brokerage account, with the long-term holding relief
+  applied by itself; iis_b: an individual investment account of type B
+  (accounts opened by the end of 2023), taken as no tax
+*/
+export type TaxRegime = "standard" | "iis_b";
 export type EventKind = "offer" | "maturity";
 
 export type Amortization = {
@@ -60,10 +66,16 @@ export type Plan = {
   amount: number;
   /* Day offset of the horizon, 1 to the maturity day */
   horizonDay: number;
+  /* Reinvest coupons and principal repaid by the horizon at the yield to maturity */
   reinvest: boolean;
   taxRegime: TaxRegime;
-  taxRatePct: number;
-  /* Parallel key-rate shift for the early exit, percentage points */
+  /*
+    The holder's other investment income in each calendar year: with this
+    position's income it decides how much is taxed at 15 rather than 13
+    percent
+  */
+  otherIncome: number;
+  /* Key-rate change by the horizon for the early exit, percentage points */
   rateShiftPct: number;
 };
 
@@ -104,7 +116,10 @@ export type Breakdown = {
   commission: number;
   total: number;
   profit: number;
-  annualPct: number;
+  /* Return over the holding period, percent: profit / invested */
+  periodPct: number;
+  /* Effective annual return, percent; null under MIN_ANNUALISED_DAYS */
+  annualPct: number | null;
   horizonDay: number;
 };
 
@@ -113,7 +128,8 @@ export type EarlyExit = {
   applicable: boolean;
   result: Breakdown;
   diff: number;
-  modDurationAtHorizon: number;
+  /* Fixed coupons only; null for a floater, whose sale is not priced by duration */
+  modDurationAtHorizon: number | null;
 };
 
 export type FloaterScenario = { shiftPct: number; breakdown: Breakdown; coupons: number[] };

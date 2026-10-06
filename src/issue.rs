@@ -31,6 +31,9 @@ pub enum Error {
     AmountTooLarge,
     /// The horizon is not between day 1 and the maturity day.
     HorizonOutOfRange,
+    /// The other investment income is not a finite number of at least
+    /// zero.
+    InvalidOtherIncome,
     /// The dirty price is not a positive finite number.
     InvalidPrice,
     /// The amount does not buy a single bond.
@@ -49,6 +52,7 @@ impl Error {
             Error::AmountNotPositive => "amount_not_positive",
             Error::AmountTooLarge => "amount_too_large",
             Error::HorizonOutOfRange => "horizon_out_of_range",
+            Error::InvalidOtherIncome => "invalid_other_income",
             Error::InvalidPrice => "invalid_price",
             Error::AmountBelowOneBond => "amount_below_one_bond",
         }
@@ -215,7 +219,9 @@ pub struct Derived {
     pub ytm_maturity: f64,
     /// Annual effective yield to the nearest offer.
     pub ytm_offer: Option<f64>,
-    /// Simple annualised yield to maturity.
+    /// Simple yield over the full term, not compounded (see
+    /// [`ytm_simple`](crate::primitives::ytm_simple)): below the yield to
+    /// maturity for an amortising issue.
     pub ytm_simple: f64,
     /// The nearest redemption event: the offer when there is one.
     pub event: Event,
